@@ -105,4 +105,17 @@ def exibir_radar():
 
         st.divider()
 
-        # 3. TOP
+        # 3. TOP 10 AUTORES
+        col_autor = next((c for c in df_exibir.columns if "Autor" in c), None)
+        if col_autor and col_valor:
+            top10_aut = df_exibir.groupby(col_autor)[col_valor].agg(['sum', 'count']).sort_values(by='sum', ascending=False).head(10).reset_index()
+            fig_aut = px.bar(top10_aut, x=col_autor, y='sum', text='count', 
+                             title="Ranking: Top 10 Autores (Valor Total)",
+                             labels={'sum': 'Total (R$)', 'count': 'Qtd'}, height=450)
+            fig_aut.update_layout(xaxis_tickangle=-45)
+            st.plotly_chart(fig_aut, use_container_width=True)
+
+        st.success(f"✅ {len(df_exibir)} registros analisados.")
+        st.dataframe(df_exibir, use_container_width=True, hide_index=True)
+    else:
+        st.warning("Sem dados para exibir.")
