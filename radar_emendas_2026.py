@@ -12,7 +12,6 @@ def formatar_moeda(valor):
 
 def exibir_radar():
     # --- REGRA DE NEGÓCIO: ID_LICENÇAS ---
-    # Aqui simulamos a captura dos dados da licença do usuário logado
     plano_usuario = st.session_state.get("plano", "Básico")  # Básico ou Premium
     uf_liberada = st.session_state.get("uf_liberada", "RJ")  # Sigla do Estado ou "Brasil"
 
@@ -46,15 +45,13 @@ def exibir_radar():
         df = pd.read_csv(nome_arquivo, sep=None, engine='python', encoding='latin1', on_bad_lines='skip', dtype=str)
         df.columns = [str(c).replace('"', '').strip() for c in df.columns]
         
-        # --- APLICAÇÃO DA TRAVA DE UF (Lógica de Licenciamento) ---
+        # --- APLICAÇÃO DA TRAVA DE UF ---
         col_uf_dados = next((c for c in df.columns if "UF" in c), None)
         
         if uf_liberada != "Brasil" and col_uf_dados:
-            # Cliente Básico: Filtra apenas o estado escolhido
             df = df[df[col_uf_dados] == uf_liberada].copy()
             status_msg = f"📍 Licença Ativa: {uf_liberada} ({plano_usuario})"
         else:
-            # Cliente Premium (Brasil): Não filtra UF
             status_msg = f"🌍 Licença Premium: Visão Brasil Liberada"
 
         # Filtro de Ano 2026
@@ -104,21 +101,49 @@ def exibir_radar():
                 fig = px.bar(df_reg.groupby("Região")["Valor Empenhado"].sum().reset_index(), x="Região", y="Valor Empenhado", title="Distribuição por Região", color_discrete_sequence=['#31333F'])
                 st.plotly_chart(fig, use_container_width=True)
         else:
-            # --- VISÃO POR FAVORECIDO (GRÁFICOS RJ/ESTADUAIS) ---
+            # --- VISÃO POR FAVORECIDO (GRÁFICOS ATUALIZADOS) ---
             st.divider()
             cl, cr = st.columns(2)
+            
             with cl:
-                c_aut = next((c for c in df_exibir.columns if "Autor" in c), None)
+                # 1. Troca de Código por Nome do Autor
+                c_aut = next((c for c in df_exibir.columns if "Autor" in c and "Código" not in c), None)
                 if c_aut:
                     df_aut = df_exibir.groupby(c_aut)["Valor Pago"].sum().sort_values(ascending=False).head(10).reset_index()
-                    fig1 = px.bar(df_aut, x=c_aut, y="Valor Pago", title="Top 10 Autores (Valor Recebido)", color="Valor Pago", color_continuous_scale="Blues")
-                    fig1.update_layout(xaxis_tickangle=-45, coloraxis_showscale=False)
+                    fig1 = px.bar(
+                        df_aut, 
+                        x=c_aut, 
+                        y="Valor Pago", 
+                        title="Top 10 Autores (Valor Recebido)", 
+                        color="Valor Pago", 
+                        color_continuous_scale="Blues"
+                    )
+                    fig1.update_layout(xaxis_tickangle=-45, coloraxis_showscale=False, xaxis_title="Autor")
                     st.plotly_chart(fig1, use_container_width=True)
+                else:
+                    st.warning("Coluna 'Autor da Emenda' não identificada.")
+
             with cr:
+                # 2. Natureza Jurídica com agrupamento em "Outros"
                 c_nat = next((c for c in df_exibir.columns if "Natureza Jurídica" in c), None)
                 if c_nat:
-                    df_nat = df_exibir.groupby(c_nat)["Valor Pago"].sum().sort_values(ascending=False).reset_index()
-                    fig2 = px.pie(df_nat, names=c_nat, values="Valor Pago", title="Natureza Jurídica (%)", hole=0.4)
+                    df_nat_raw = df_exibir.groupby(c_nat)["Valor Pago"].sum().sort_values(ascending=False).reset_index()
+                    
+                    if len(df_nat_raw) > 10:
+                        top_10 = df_nat_raw.head(10).copy()
+                        outros_soma = df_nat_raw.iloc[10:]["Valor Pago"].sum()
+                        df_outros = pd.DataFrame({c_nat: ["Outros"], "Valor Pago": [outros_soma]})
+                        df_final_nat = pd.concat([top_10, df_outros], ignore_index=True)
+                    else:
+                        df_final_nat = df_nat_raw
+
+                    fig2 = px.pie(
+                        df_final_nat, 
+                        names=c_nat, 
+                        values="Valor Pago", 
+                        title="Natureza Jurídica (%) - Top 10 + Outros", 
+                        hole=0.4
+                    )
                     fig2.update_layout(legend=dict(orientation="h", y=-0.2))
                     st.plotly_chart(fig2, use_container_width=True)
 
