@@ -11,7 +11,7 @@ def formatar_moeda(valor):
         return "R$ 0,00"
 
 def exibir_radar():
-    # Estilização para as Molduras dos Cards (Premium Look)
+    # Estilização das Molduras dos Cards
     st.markdown("""
         <style>
         [data-testid="stMetricValue"] { font-size: 1.8rem; }
@@ -27,7 +27,7 @@ def exibir_radar():
 
     st.title("🏛️ Radar de Emendas 2026 - Dashboard")
     
-    tipo_visao = st.selectbox("Escolha a Visualização:", ["Visão Geral", "Por Favorecido"], key="select_dashboard_v20")
+    tipo_visao = st.selectbox("Escolha a Visualização:", ["Visão Geral", "Por Favorecido"], key="select_dashboard_v21")
 
     file_id = st.secrets.get("id_emendas_geral") if tipo_visao == "Visão Geral" else st.secrets.get("id_emendas_favorecido")
     nome_arquivo = f"base_dados_{file_id}.csv"
@@ -41,11 +41,12 @@ def exibir_radar():
         st.rerun()
 
     if not os.path.exists(nome_arquivo):
-        with st.spinner("Baixando novos dados..."):
+        with st.spinner("Baixando dados..."):
             url = f'https://drive.google.com/uc?export=download&id={file_id}'
             gdown.download(url, nome_arquivo, quiet=False)
 
     try:
+        # Carregamento flexível
         df = pd.read_csv(nome_arquivo, sep=None, engine='python', encoding='latin1', on_bad_lines='skip', dtype=str)
         df.columns = [str(c).replace('"', '').strip() for c in df.columns]
         
@@ -53,7 +54,7 @@ def exibir_radar():
         col_ano = next((c for c in df.columns if "Ano" in c or "ANO" in c), None)
         df_2026 = df[df[col_ano].fillna('').astype(str).str.contains("2026")].copy() if col_ano else df.copy()
 
-        # Limpeza e Padronização de Valores
+        # Padronização de Valores (Essencial para os Cards)
         mapeamento = {
             "Valor Empenhado": ["Valor Empenhado", "Valor Total Empenhado", "VALOR EMPENHADO"],
             "Valor Liquidado": ["Valor Liquidado", "Valor Total Liquidado", "VALOR LIQUIDADO"],
@@ -77,37 +78,41 @@ def exibir_radar():
             colunas_existentes = [c for c in colunas_solicitadas if c in df_2026.columns]
             df_exibir = df_2026[colunas_existentes].copy()
         else:
+            # Visão Favorecido: Remove apenas códigos chatos
             cols_fora = ["Código da Emenda", "Código do Favorecido"]
             df_exibir = df_2026.drop(columns=[c for c in cols_fora if c in df_2026.columns])
 
     except Exception as e:
-        st.error(f"Erro no processamento: {e}"); return
+        st.error(f"Erro no processamento dos dados: {e}"); return
 
     if not df_exibir.empty:
         st.markdown(f"## 📊 {tipo_visao} 2026")
         
-        # --- CARDS COM MOLDURA ---
+        # --- BLOCO 1: CARDS COM MOLDURA ---
         if tipo_visao == "Visão Geral":
             c1, c2, c3 = st.columns(3)
             with c1: st.metric("💰 Total Empenhado", formatar_moeda(df_exibir["Valor Empenhado"].sum() if "Valor Empenhado" in df_exibir.columns else 0))
             with c2: st.metric("💸 Total Liquidado", formatar_moeda(df_exibir["Valor Liquidado"].sum() if "Valor Liquidado" in df_exibir.columns else 0))
             with c3: st.metric("✅ Total Pago", formatar_moeda(df_exibir["Valor Pago"].sum() if "Valor Pago" in df_exibir.columns else 0))
-            st.divider()
         else:
             v_pago = df_exibir["Valor Pago"].sum() if "Valor Pago" in df_exibir.columns else 0
             st.metric("💰 TOTAL PAGO ACUMULADO", formatar_moeda(v_pago))
-            st.divider()
+        
+        st.divider()
 
-            # Gráficos específicos apenas para a visão "Por Favorecido"
+        # --- BLOCO 2: GRÁFICOS (APENAS PARA FAVORECIDO) ---
+        if tipo_visao == "Por Favorecido":
             col_rank = next((c for c in df_exibir.columns if "Autor" in c and "Código" not in c), None)
             if col_rank and "Valor Pago" in df_exibir.columns:
                 top10 = df_exibir.groupby(col_rank)["Valor Pago"].sum().sort_values(ascending=False).head(10).reset_index()
-                fig_rank = px.bar(top10, x=col_rank, y="Valor Pago", title="Top 10: Autores", height=500, color="Valor Pago", color_continuous_scale='Blues')
+                fig_rank = px.bar(top10, x=col_rank, y="Valor Pago", title="Ranking: Top 10 Autores", height=500, color="Valor Pago", color_continuous_scale='Blues')
                 fig_rank.update_layout(xaxis_tickangle=-45, coloraxis_showscale=False, margin=dict(b=150))
                 st.plotly_chart(fig_rank, use_container_width=True)
+                st.divider()
 
-        # Tabela Final (Comum a ambos, mas com colunas filtradas na Visão Geral)
-        st.success(f"Tabela detalhada para {tipo_visao}")
+        # --- BLOCO 3: TABELA FINAL ---
+        st.success(f"Tabela de dados: {tipo_visao}")
         st.dataframe(df_exibir, use_container_width=True, hide_index=True)
+        
     else:
-        st.warning("Nenhum dado de 2026 encontrado.")
+        st.warning("Não há dados de 2026 para exibir nesta visão.")
