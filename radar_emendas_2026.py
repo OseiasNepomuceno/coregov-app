@@ -50,11 +50,13 @@ def exibir_radar():
         df = pd.read_csv(nome_arquivo, sep=None, engine='python', encoding='latin1', on_bad_lines='skip')
         df.columns = [str(c).strip().upper() for c in df.columns]
 
-        # --- FILTRO DE ANO 2026 ---
+        # --- FILTRO DE ANO 2026 (VERSÃO À PROVA DE FALHAS) ---
         coluna_ano = next((c for c in df.columns if "ANO" in c), None)
         if coluna_ano:
-            df[coluna_ano] = df[coluna_ano].astype(str).str.replace('.0', '', regex=False).str.strip()
-            df = df[df[coluna_ano] == "2026"]
+            # Transforma em string, remove decimais (.0) e espaços
+            df[coluna_ano] = df[coluna_ano].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
+            # Filtra se o texto "2026" estiver presente na célula
+            df = df[df[coluna_ano].str.contains("2026", na=False)]
 
         # --- LÓGICA DE ACESSO PREMIUM (NACIONAL) ---
         usuario = st.session_state.get('usuario_logado', {})
@@ -78,7 +80,6 @@ def exibir_radar():
 
     # 4. Exibição de Resultados
     if not df.empty:
-        # Se for Visão Geral, mostra os Cards Financeiros
         if tipo_visao == "Visão Geral":
             c_emp = next((c for c in df.columns if "EMPENHADO" in c), None)
             c_liq = next((c for c in df.columns if "LIQUIDADO" in c), None)
@@ -99,7 +100,6 @@ def exibir_radar():
 
         st.write(f"📊 Registros encontrados para 2026: **{len(df)}**")
         
-        # Filtro de Pesquisa na Tabela
         busca = st.text_input("🔍 Pesquisar na tabela (Cidade, Nome, CNPJ):", key="search_radar")
         if busca:
             mask = df.astype(str).apply(lambda x: x.str.contains(busca, case=False)).any(axis=1)
