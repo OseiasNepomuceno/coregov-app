@@ -47,16 +47,17 @@ def exibir_radar():
 
     # 3. Processamento de Dados
     try:
-        df = pd.read_csv(nome_arquivo, sep=None, engine='python', encoding='latin1', on_bad_lines='skip')
+        # AJUSTE: Forçando separador ';' conforme detectado no arquivo real
+        df = pd.read_csv(nome_arquivo, sep=';', engine='python', encoding='latin1', on_bad_lines='skip')
         df.columns = [str(c).strip().upper() for c in df.columns]
 
-        # --- FILTRO DE ANO 2026 (VERSÃO À PROVA DE FALHAS) ---
-        coluna_ano = next((c for c in df.columns if "ANO" in c), None)
-        if coluna_ano:
-            # Transforma em string, remove decimais (.0) e espaços
+        # --- FILTRO DE ANO 2026 (VERSÃO PARA CSV REAL) ---
+        coluna_ano = 'ANO DA EMENDA' # Nome exato encontrado na sua planilha
+        if coluna_ano in df.columns:
+            # Limpa formatos decimais (ex: 2026.0) e espaços
             df[coluna_ano] = df[coluna_ano].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
-            # Filtra se o texto "2026" estiver presente na célula
-            df = df[df[coluna_ano].str.contains("2026", na=False)]
+            # Filtro rigoroso
+            df = df[df[coluna_ano] == "2026"]
 
         # --- LÓGICA DE ACESSO PREMIUM (NACIONAL) ---
         usuario = st.session_state.get('usuario_logado', {})
@@ -86,16 +87,18 @@ def exibir_radar():
             c_pag = next((c for c in df.columns if "PAGO" in c), None)
 
             def conv(c):
-                if c:
-                    return pd.to_numeric(df[c].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False), errors='coerce').sum()
+                if c and c in df.columns:
+                    # AJUSTE: Limpeza para o padrão brasileiro (ponto milhar, vírgula decimal)
+                    valores = df[c].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
+                    return pd.to_numeric(valores, errors='coerce').sum()
                 return 0.0
 
             v1, v2, v3 = conv(c_emp), conv(c_liq), conv(c_pag)
 
             m1, m2, m3 = st.columns(3)
-            m1.metric("EMPENHADO", formatar_moeda(v1))
-            m2.metric("LIQUIDADO", formatar_moeda(v2))
-            m3.metric("PAGO", formatar_moeda(v3))
+            m1.metric("VALOR EMPENHADO", formatar_moeda(v1))
+            m2.metric("VALOR LIQUIDADO", formatar_moeda(v2))
+            m3.metric("VALOR PAGO", formatar_moeda(v3))
             st.divider()
 
         st.write(f"📊 Registros encontrados para 2026: **{len(df)}**")
