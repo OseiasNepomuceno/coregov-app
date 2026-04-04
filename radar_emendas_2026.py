@@ -11,7 +11,12 @@ def formatar_moeda(valor):
         return "R$ 0,00"
 
 def exibir_radar():
-    # Estilização das Molduras dos Cards
+    # --- REGRA DE NEGÓCIO: ID_LICENÇAS ---
+    # Aqui simulamos a captura dos dados da licença do usuário logado
+    plano_usuario = st.session_state.get("plano", "Básico")  # Básico ou Premium
+    uf_liberada = st.session_state.get("uf_liberada", "RJ")  # Sigla do Estado ou "Brasil"
+
+    # Estilização dos Cards
     st.markdown("""
         <style>
         [data-testid="stMetricValue"] { font-size: 1.8rem; }
@@ -25,23 +30,15 @@ def exibir_radar():
         </style>
     """, unsafe_allow_html=True)
 
-    st.title("🏛️ Radar de Emendas 2026 - Dashboard")
+    st.title("🏛️ Radar de Emendas 2026")
     
-    tipo_visao = st.selectbox("Escolha a Visualização:", ["Visão Geral", "Por Favorecido"], key="select_dashboard_v23")
+    tipo_visao = st.selectbox("Escolha a Visualização:", ["Visão Geral", "Por Favorecido"], key="select_dashboard_v26")
 
     file_id = st.secrets.get("id_emendas_geral") if tipo_visao == "Visão Geral" else st.secrets.get("id_emendas_favorecido")
     nome_arquivo = f"base_dados_{file_id}.csv"
 
-    if st.button("🔄 ATUALIZAR E LIMPAR TUDO"):
-        for f in os.listdir():
-            if f.endswith(".csv"): 
-                try: os.remove(f)
-                except: pass
-        st.cache_data.clear()
-        st.rerun()
-
     if not os.path.exists(nome_arquivo):
-        with st.spinner("Baixando dados..."):
+        with st.spinner("Sincronizando dados da licença..."):
             url = f'https://drive.google.com/uc?export=download&id={file_id}'
             gdown.download(url, nome_arquivo, quiet=False)
 
@@ -49,13 +46,26 @@ def exibir_radar():
         df = pd.read_csv(nome_arquivo, sep=None, engine='python', encoding='latin1', on_bad_lines='skip', dtype=str)
         df.columns = [str(c).replace('"', '').strip() for c in df.columns]
         
+        # --- APLICAÇÃO DA TRAVA DE UF (Lógica de Licenciamento) ---
+        col_uf_dados = next((c for c in df.columns if "UF" in c), None)
+        
+        if uf_liberada != "Brasil" and col_uf_dados:
+            # Cliente Básico: Filtra apenas o estado escolhido
+            df = df[df[col_uf_dados] == uf_liberada].copy()
+            status_msg = f"📍 Licença Ativa: {uf_liberada} ({plano_usuario})"
+        else:
+            # Cliente Premium (Brasil): Não filtra UF
+            status_msg = f"🌍 Licença Premium: Visão Brasil Liberada"
+
+        # Filtro de Ano 2026
         col_ano = next((c for c in df.columns if "Ano" in c or "ANO" in c), None)
         df_2026 = df[df[col_ano].fillna('').astype(str).str.contains("2026")].copy() if col_ano else df.copy()
 
+        # Limpeza de Valores Financeiros
         mapeamento = {
-            "Valor Empenhado": ["Valor Empenhado", "Valor Total Empenhado", "VALOR EMPENHADO"],
-            "Valor Liquidado": ["Valor Liquidado", "Valor Total Liquidado", "VALOR LIQUIDADO"],
-            "Valor Pago": ["Valor Pago", "Valor Total Pago", "VALOR PAGO", "Valor Recebido"]
+            "Valor Empenhado": ["Valor Empenhado", "Valor Total Empenhado"],
+            "Valor Liquidado": ["Valor Liquidado", "Valor Total Liquidado"],
+            "Valor Pago": ["Valor Pago", "Valor Total Pago", "Valor Recebido", "VALOR RECEBIDO"]
         }
 
         for destino, origens in mapeamento.items():
@@ -66,62 +76,53 @@ def exibir_radar():
                     df_2026[destino] = pd.to_numeric(df_2026[destino], errors='coerce').fillna(0)
                     break
 
+        # Filtro de Colunas por Visão
         if tipo_visao == "Visão Geral":
-            colunas_solicitadas = [
-                "Ano da Emenda", "Localidade de aplicação do recurso", "Município", 
-                "UF", "Região", "Nome do Programa", 
-                "Valor Empenhado", "Valor Liquidado", "Valor Pago"
-            ]
-            colunas_existentes = [c for c in colunas_solicitadas if c in df_2026.columns]
-            df_exibir = df_2026[colunas_existentes].copy()
+            cols = ["Ano da Emenda", "Localidade de aplicação do recurso", "Município", "UF", "Região", "Nome do Programa", "Valor Empenhado", "Valor Liquidado", "Valor Pago"]
+            df_exibir = df_2026[[c for c in cols if c in df_2026.columns]].copy()
         else:
             cols_fora = ["Código da Emenda", "Código do Favorecido"]
-            df_exibir = df_2026.drop(columns=[c for c in cols_fora if c in df_2026.columns])
+            df_exibir = df_2026.drop(columns=[c for c in cols_fora if c in df_2026.columns]).copy()
 
     except Exception as e:
-        st.error(f"Erro no processamento: {e}"); return
+        st.error(f"Erro ao validar licença: {e}"); return
 
     if not df_exibir.empty:
-        st.markdown(f"## 📊 {tipo_visao} 2026")
+        st.info(status_msg)
         
+        # --- CARDS ---
         if tipo_visao == "Visão Geral":
             c1, c2, c3 = st.columns(3)
             with c1: st.metric("💰 Total Empenhado", formatar_moeda(df_exibir["Valor Empenhado"].sum() if "Valor Empenhado" in df_exibir.columns else 0))
             with c2: st.metric("💸 Total Liquidado", formatar_moeda(df_exibir["Valor Liquidado"].sum() if "Valor Liquidado" in df_exibir.columns else 0))
             with c3: st.metric("✅ Total Pago", formatar_moeda(df_exibir["Valor Pago"].sum() if "Valor Pago" in df_exibir.columns else 0))
-            st.divider()
-
-            # --- GRÁFICO: TOTAL POR REGIÃO (FILTRADO) ---
-            if "Região" in df_exibir.columns and "Valor Empenhado" in df_exibir.columns:
-                # Filtragem para remover as categorias indesejadas
-                termos_remover = ["Nacional", "Múltiplo", "Exterior"]
-                df_regiao_filtered = df_exibir[~df_exibir["Região"].isin(termos_remover)].copy()
-                
-                df_regiao = df_regiao_filtered.groupby("Região")["Valor Empenhado"].sum().sort_values(ascending=False).reset_index()
-                
-                fig_reg = px.bar(df_regiao, x="Região", y="Valor Empenhado", 
-                                 title="Distribuição de Recursos por Região (Geográfico)",
-                                 labels={"Valor Empenhado": "Total (R$)"},
-                                 color="Valor Empenhado", color_continuous_scale="Viridis", height=400)
-                fig_reg.update_layout(coloraxis_showscale=False)
-                st.plotly_chart(fig_reg, use_container_width=True)
+            
+            # Gráfico de Região (Só para visão Nacional/Brasil)
+            if uf_liberada == "Brasil" and "Região" in df_exibir.columns:
                 st.divider()
-
+                df_reg = df_exibir[~df_exibir["Região"].isin(["Nacional", "Múltiplo", "Exterior"])]
+                fig = px.bar(df_reg.groupby("Região")["Valor Empenhado"].sum().reset_index(), x="Região", y="Valor Empenhado", title="Distribuição por Região", color_discrete_sequence=['#31333F'])
+                st.plotly_chart(fig, use_container_width=True)
         else:
-            # Lógica do Favorecido permanece igual
-            v_pago = df_exibir["Valor Pago"].sum() if "Valor Pago" in df_exibir.columns else 0
-            st.metric("💰 TOTAL PAGO ACUMULADO", formatar_moeda(v_pago))
+            # --- VISÃO POR FAVORECIDO (GRÁFICOS RJ/ESTADUAIS) ---
             st.divider()
+            cl, cr = st.columns(2)
+            with cl:
+                c_aut = next((c for c in df_exibir.columns if "Autor" in c), None)
+                if c_aut:
+                    df_aut = df_exibir.groupby(c_aut)["Valor Pago"].sum().sort_values(ascending=False).head(10).reset_index()
+                    fig1 = px.bar(df_aut, x=c_aut, y="Valor Pago", title="Top 10 Autores (Valor Recebido)", color="Valor Pago", color_continuous_scale="Blues")
+                    fig1.update_layout(xaxis_tickangle=-45, coloraxis_showscale=False)
+                    st.plotly_chart(fig1, use_container_width=True)
+            with cr:
+                c_nat = next((c for c in df_exibir.columns if "Natureza Jurídica" in c), None)
+                if c_nat:
+                    df_nat = df_exibir.groupby(c_nat)["Valor Pago"].sum().sort_values(ascending=False).reset_index()
+                    fig2 = px.pie(df_nat, names=c_nat, values="Valor Pago", title="Natureza Jurídica (%)", hole=0.4)
+                    fig2.update_layout(legend=dict(orientation="h", y=-0.2))
+                    st.plotly_chart(fig2, use_container_width=True)
 
-            col_rank = next((c for c in df_exibir.columns if "Autor" in c and "Código" not in c), None)
-            if col_rank and "Valor Pago" in df_exibir.columns:
-                top10 = df_exibir.groupby(col_rank)["Valor Pago"].sum().sort_values(ascending=False).head(10).reset_index()
-                fig_rank = px.bar(top10, x=col_rank, y="Valor Pago", title="Ranking: Top 10 Autores", height=500, color="Valor Pago", color_continuous_scale='Blues')
-                fig_rank.update_layout(xaxis_tickangle=-45, coloraxis_showscale=False, margin=dict(b=150))
-                st.plotly_chart(fig_rank, use_container_width=True)
-                st.divider()
-
-        st.success(f"Tabela de dados: {tipo_visao}")
+        st.divider()
         st.dataframe(df_exibir, use_container_width=True, hide_index=True)
     else:
-        st.warning("Nenhum dado encontrado.")
+        st.warning(f"Não foram encontrados dados para a licença: {uf_liberada}")
