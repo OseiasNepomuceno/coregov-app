@@ -11,3 +11,4 @@ python-docx
 gspread
 google-auth
 google-auth-oauthlib
+plotly
