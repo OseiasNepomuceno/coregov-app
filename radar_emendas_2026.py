@@ -26,32 +26,36 @@ def exibir_radar():
     
     tipo_visao = st.selectbox("Visualização:", ["Visão Geral", "Por Favorecido"], key="v_topo")
 
-    # IDs dos arquivos nos Secrets
     file_id = st.secrets.get("id_emendas_geral") if tipo_visao == "Visão Geral" else st.secrets.get("id_emendas_favorecido")
     nome_arquivo = "base_emendas_2026.csv"
 
-    # Download
     if not os.path.exists(nome_arquivo):
         if not file_id:
-            st.error("Erro: ID do arquivo não configurado nos Secrets."); return
+            st.error("Erro: ID do arquivo não configurado."); return
         with st.spinner("Sincronizando dados..."):
             url = f'https://drive.google.com/uc?id={file_id}'
             gdown.download(url, nome_arquivo, quiet=False, fuzzy=True)
 
     try:
-        # Leitura com separador ';' e encoding latin1 (padrão de arquivos exportados de sistemas gov)
+        # Lendo com separador ';' e encoding latin1
         df = pd.read_csv(nome_arquivo, sep=';', encoding='latin1', on_bad_lines='skip', dtype=str)
         
-        # Limpeza de nomes de colunas
-        df.columns = [str(c).strip().upper() for c in df.columns]
+        # Limpeza de nomes de colunas: removemos espaços e mantemos o nome EXATO do arquivo
+        df.columns = [str(c).strip() for c in df.columns]
 
-        # --- FILTRO DE ANO 2026 ---
-        # Usando o nome exato que você enviou: "ANO DA EMENDA"
-        col_ano = "ANO DA EMENDA"
+        # --- FILTRO DE ANO 2026 (BASEADO NO SEU BLOCO DE NOTAS) ---
+        col_ano = "Ano da Emenda" 
+        
         if col_ano in df.columns:
-            # Remove decimais como .0 e filtra apenas por 2026
+            # Remove qualquer .0 que o pandas coloque e espaços
             df[col_ano] = df[col_ano].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
+            # Filtro por 2026
             df = df[df[col_ano] == "2026"]
+        else:
+            # Se ele não achar pelo nome exato, tenta achar qualquer coluna que contenha 'Ano'
+            col_alternativa = next((c for c in df.columns if "Ano" in c), None)
+            if col_alternativa:
+                df = df[df[col_alternativa].astype(str).str.contains("2026", na=False)]
             
     except Exception as e:
         st.error(f"Erro ao ler o arquivo: {e}"); return
@@ -64,27 +68,27 @@ def exibir_radar():
     if acesso_nacional:
         st.success("🔓 **Acesso Premium:** Visualizando dados nacionais")
     else:
-        col_uf = next((c for c in ["UF", "ESTADO", "LOCALIDADE"] if c in df.columns), None)
+        # Busca coluna de UF
+        col_uf = next((c for c in ["UF", "Estado", "UF_BENEFICIARIO"] if c in df.columns), None)
         if col_uf:
             sigla = str(usuario.get('LOCALIDADE') or "SP").upper()
             estado_nome = remover_acentos(MAPA_ESTADOS.get(sigla, sigla))
             df = df[df[col_uf].astype(str).apply(remover_acentos) == estado_nome]
             st.info(f"📍 Localidade: {estado_nome}")
 
-    # Exibição dos Dados
     if not df.empty:
         if tipo_visao == "Visão Geral":
-            # Função para somar valores monetários brasileiros (99.999,41)
             def somar_coluna(termo):
+                # Busca colunas como 'Valor Empenhado', 'Valor Pago'
                 col = next((c for c in df.columns if termo in c), None)
                 if col:
                     v = df[col].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
                     return pd.to_numeric(v, errors='coerce').sum()
                 return 0.0
 
-            v_emp = somar_coluna("EMPENHADO")
-            v_liq = somar_coluna("LIQUIDADO")
-            v_pag = somar_coluna("PAGO")
+            v_emp = somar_coluna("Empenhado")
+            v_liq = somar_coluna("Liquidado")
+            v_pag = somar_coluna("Pago")
 
             c1, c2, c3 = st.columns(3)
             c1.metric("EMPENHADO", formatar_moeda(v_emp))
@@ -92,13 +96,10 @@ def exibir_radar():
             c3.metric("PAGO", formatar_moeda(v_pag))
             st.divider()
 
-        st.write(f"📊 Foram encontrados **{len(df)}** registros para 2026.")
-        
-        busca = st.text_input("🔍 Pesquisar na tabela:", key="busca_final_radar")
-        if busca:
-            mask = df.astype(str).apply(lambda x: x.str.contains(busca, case=False)).any(axis=1)
-            st.dataframe(df[mask], use_container_width=True, hide_index=True)
-        else:
-            st.dataframe(df, use_container_width=True, hide_index=True)
+        st.write(f"📊 Registros encontrados: **{len(df)}**")
+        st.dataframe(df, use_container_width=True, hide_index=True)
     else:
-        st.warning("⚠️ Nenhum registro de 2026 encontrado na base.")
+        st.warning("⚠️ Nenhum registro de 2026 encontrado. Verifique o ano no arquivo.")
+        # Ajuda a debugar mostrando o que ele encontrou
+        if not df.empty:
+            st.write("Colunas disponíveis:", list(df.columns))
