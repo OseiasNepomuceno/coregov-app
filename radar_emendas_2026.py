@@ -31,10 +31,12 @@ def exibir_radar():
 
     # IDs do Drive
     if tipo_visao == "Visão Geral":
-        file_id = st.secrets.get("file_id_emendas")
+       # Para Visão Geral
+        file_id = st.secrets.get("id_emendas_geral")
         nome_arquivo = "2026_Emendas_Geral.csv"
     else:
-        file_id = st.secrets.get("file_id_emendas_favorecido")
+        # Para Visão por Favorecido
+        file_id = st.secrets.get("id_emendas_favorecido")
         nome_arquivo = "2026_Emendas_Favorecido.csv"
 
     # 1. Download (Sincronização)
