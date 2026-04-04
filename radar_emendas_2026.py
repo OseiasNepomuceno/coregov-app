@@ -12,14 +12,15 @@ def formatar_moeda(valor):
 
 def exibir_radar():
     # --- CONFIGURAÇÃO DE ACESSO ---
-    plano_usuario = st.session_state.get("plano", "Básico")  
-    uf_liberada = st.session_state.get("uf_liberada", "RJ").strip().upper()
+    # Ajuste para aceitar "RIO DE JANEIRO" ou "RJ"
+    uf_sessao = st.session_state.get("uf_liberada", "RJ").strip().upper()
+    mapeamento_uf = {"RJ": "RIO DE JANEIRO", "SP": "SAO PAULO", "MG": "MINAS GERAIS"} # Expanda se necessário
+    uf_busca = mapeamento_uf.get(uf_sessao, uf_sessao)
 
     st.title("🏛️ Radar de Emendas 2026")
     
     tipo_visao = st.selectbox("Escolha a Visualização:", ["Visão Geral", "Por Favorecido"], key="select_dashboard_v26")
 
-    # IDs do Secrets
     key_id = "id_emendas_geral" if tipo_visao == "Visão Geral" else "id_emendas_favorecido"
     file_id = st.secrets.get(key_id)
     nome_arquivo = f"base_{key_id}.csv"
@@ -30,21 +31,18 @@ def exibir_radar():
             gdown.download(url, nome_arquivo, quiet=True)
 
     try:
-        # Carregando com os nomes de colunas confirmados
         df = pd.read_csv(nome_arquivo, sep=None, engine='python', encoding='latin1', on_bad_lines='skip', dtype=str)
         df.columns = [str(c).replace('"', '').strip() for c in df.columns]
 
-        # 1. FILTRO DE UF (Coluna exata: "UF")
-        if "UF" in df.columns and uf_liberada != "BRASIL":
+        # 1. FILTRO DE UF (Busca por "RIO DE JANEIRO")
+        if "UF" in df.columns and uf_sessao != "BRASIL":
             df["UF"] = df["UF"].fillna('').str.strip().str.upper()
-            df = df[df["UF"] == uf_liberada].copy()
-            status_msg = f"📍 Filtro Ativo: {uf_liberada}"
-        else:
-            status_msg = "🌍 Visão Brasil Liberada"
+            # Filtra tanto pela sigla quanto pelo nome extenso
+            df = df[(df["UF"] == uf_sessao) | (df["UF"] == uf_busca)].copy()
 
-        # 2. FILTRO DE ANO (Coluna exata: "Ano da Emenda")
+        # 2. FILTRO DE ANO (Ano da Emenda == 2026)
         if "Ano da Emenda" in df.columns:
-            df = df[df["Ano da Emenda"].fillna('').astype(str).str.contains("2026")].copy()
+            df = df[df["Ano da Emenda"].astype(str).str.contains("2026")].copy()
 
         # 3. TRATAMENTO FINANCEIRO
         for col in ["Valor Empenhado", "Valor Liquidado", "Valor Pago"]:
@@ -52,23 +50,20 @@ def exibir_radar():
                 df[col] = df[col].astype(str).str.replace('R$', '', regex=False).str.replace('.', '', regex=False).str.replace(',', '.', regex=False).str.strip()
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
 
-        # 4. SELEÇÃO DE COLUNAS INTERESSANTES (Conforme sua lista)
-        colunas_interessantes = [
+        # 4. COLUNAS INTERESSANTES (Trocando Município por Localidade)
+        colunas_exibir = [
             "Ano da Emenda", "Tipo de Emenda", "Nome do Autor da Emenda", 
-            "Localidade de aplicação do recurso", "Município", "UF", "Região", 
-            "Nome Função", "Nome Subfunção", "Nome Programa", "Nome Ação", 
-            "Valor Empenhado", "Valor Liquidado", "Valor Pago"
+            "Localidade de aplicação do recurso", "UF", "Região", 
+            "Nome Programa", "Valor Empenhado", "Valor Liquidado", "Valor Pago"
         ]
-        
-        # Filtra apenas as colunas que realmente existem no arquivo atual
-        df_exibir = df[[c for c in colunas_interessantes if c in df.columns]].copy()
+        df_exibir = df[[c for c in colunas_exibir if c in df.columns]].copy()
 
     except Exception as e:
-        st.error(f"Erro ao processar: {e}")
+        st.error(f"Erro no processamento: {e}")
         return
 
     if not df_exibir.empty:
-        st.info(status_msg)
+        st.success(f"✅ Dados carregados para: {uf_busca}")
         
         if tipo_visao == "Visão Geral":
             c1, c2, c3 = st.columns(3)
@@ -76,43 +71,32 @@ def exibir_radar():
             with c2: st.metric("💸 Liquidado", formatar_moeda(df_exibir["Valor Liquidado"].sum()))
             with c3: st.metric("✅ Pago", formatar_moeda(df_exibir["Valor Pago"].sum()))
             
-            # Gráfico de Região para Visão Brasil
-            if uf_liberada == "BRASIL" and "Região" in df_exibir.columns:
-                st.divider()
-                df_reg = df_exibir[~df_exibir["Região"].isin(["Nacional", "Múltiplo", "Exterior"])]
-                fig_reg = px.bar(df_reg.groupby("Região")["Valor Empenhado"].sum().reset_index(), x="Região", y="Valor Empenhado", title="Empenho por Região", color_discrete_sequence=['#007bff'])
-                st.plotly_chart(fig_reg, use_container_width=True)
+            # Gráfico por Localidade (Top 10 Cidades/Locais)
+            st.divider()
+            col_loc = "Localidade de aplicação do recurso"
+            if col_loc in df_exibir.columns:
+                df_loc = df_exibir.groupby(col_loc)["Valor Pago"].sum().sort_values(ascending=False).head(10).reset_index()
+                fig_loc = px.bar(df_loc, x=col_loc, y="Valor Pago", title="Top 10 Localidades (Valor Pago)", color_discrete_sequence=['#2ecc71'])
+                st.plotly_chart(fig_loc, use_container_width=True)
         
         else:
-            # --- VISÃO POR FAVORECIDO / AUTOR ---
+            # --- VISÃO POR FAVORECIDO ---
             st.divider()
             cl, cr = st.columns(2)
-            
             with cl:
-                # Top 10 Autores pelo NOME (conforme solicitado)
-                col_autor = "Nome do Autor da Emenda"
-                if col_autor in df_exibir.columns:
-                    df_aut = df_exibir.groupby(col_autor)["Valor Pago"].sum().sort_values(ascending=False).head(10).reset_index()
-                    fig1 = px.bar(df_aut, x=col_autor, y="Valor Pago", title="Top 10 Autores (Valor Pago)", color="Valor Pago", color_continuous_scale="Blues")
-                    fig1.update_layout(xaxis_tickangle=-45, coloraxis_showscale=False)
+                col_aut = "Nome do Autor da Emenda"
+                if col_aut in df_exibir.columns:
+                    df_aut = df_exibir.groupby(col_aut)["Valor Pago"].sum().sort_values(ascending=False).head(10).reset_index()
+                    fig1 = px.bar(df_aut, x=col_aut, y="Valor Pago", title="Top 10 Autores", color="Valor Pago", color_continuous_scale="Viridis")
                     st.plotly_chart(fig1, use_container_width=True)
-
             with cr:
-                # Natureza Jurídica (Se disponível no arquivo de favorecidos) ou Função
-                col_grafico_2 = "Nome Função" # Usando Função como alternativa se Natureza não estiver na lista interessantes
-                if col_grafico_2 in df_exibir.columns:
-                    df_fun = df_exibir.groupby(col_grafico_2)["Valor Pago"].sum().sort_values(ascending=False).reset_index()
-                    # Agrupamento Outros
-                    if len(df_fun) > 8:
-                        top = df_fun.head(8).copy()
-                        outros = pd.DataFrame({col_grafico_2: ["Outros"], "Valor Pago": [df_fun.iloc[8:]["Valor Pago"].sum()]})
-                        df_fun = pd.concat([top, outros], ignore_index=True)
-                    
-                    fig2 = px.pie(df_fun, names=col_grafico_2, values="Valor Pago", title="Distribuição por Função (%)", hole=0.4)
+                col_prog = "Nome Programa"
+                if col_prog in df_exibir.columns:
+                    df_p = df_exibir.groupby(col_prog)["Valor Pago"].sum().sort_values(ascending=False).head(8).reset_index()
+                    fig2 = px.pie(df_p, names=col_prog, values="Valor Pago", title="Distribuição por Programa", hole=0.4)
                     st.plotly_chart(fig2, use_container_width=True)
 
         st.divider()
-        # Exibe a tabela apenas com as colunas interessantes
         st.dataframe(df_exibir, use_container_width=True, hide_index=True)
     else:
-        st.warning(f"Sem dados de 2026 para {uf_liberada}. Verifique se o arquivo contém registros para este ano/estado.")
+        st.warning(f"Não encontramos registros para '{uf_busca}' em 2026. Verifique os filtros.")
