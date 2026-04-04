@@ -51,22 +51,21 @@ def exibir_radar():
         df = pd.read_csv(nome_arquivo, sep=None, engine='python', encoding='latin1', on_bad_lines='skip')
         df.columns = [str(c).strip().upper() for c in df.columns]
 
-        # --- TESTE RÁPIDO DE DEPURAÇÃO (Pode remover após consertar) ---
+        # --- BLOCO DE DEPURAÇÃO (OPCIONAL) ---
         with st.expander("🛠️ Debug: Diagnóstico da Planilha"):
             st.write(f"Arquivo lido: {nome_arquivo}")
             st.write(f"Total de linhas brutas: {len(df)}")
-            st.write(f"Colunas detectadas: {df.columns.tolist()}")
-            if not df.empty:
-                col_ano_debug = next((c for c in df.columns if "ANO" in c), None)
-                if col_ano_debug:
-                    anos_unicos = df[col_ano_debug].unique()
-                    st.write(f"Anos encontrados na coluna {col_ano_debug}: {anos_unicos}")
-        # --------------------------------------------------------------
+            col_ano_debug = next((c for c in df.columns if "ANO" in c), None)
+            if col_ano_debug:
+                anos_unicos = df[col_ano_debug].unique()
+                st.write(f"Anos encontrados na coluna {col_ano_debug}: {anos_unicos}")
 
-        # --- FILTRO DE ANO 2026 ---
+        # --- SOLUÇÃO: CORREÇÃO DE FILTRO ---
         coluna_ano = next((c for c in df.columns if "ANO" in c), None)
         if coluna_ano:
-            df = df[df[coluna_ano].astype(str).str.contains("2026", na=False)]
+            # Convertemos para numérico (int) para garantir a comparação exata
+            df[coluna_ano] = pd.to_numeric(df[coluna_ano], errors='coerce')
+            df = df[df[coluna_ano] == 2026]
             
     except Exception as e:
         st.error(f"Erro ao processar arquivo: {e}")
@@ -87,44 +86,11 @@ def exibir_radar():
         df = df.drop(columns=['UF_AUX'])
         st.info(f"📍 Exibindo: **{nome_completo_busca}**")
 
-    # 4. Cards Financeiros
+    # 4. Cards Financeiros (Somente para Visão Geral)
     if tipo_visao == "Visão Geral" and not df.empty:
         col_emp = next((c for c in df.columns if "EMPENHADO" in c), None)
         col_liq = next((c for c in df.columns if "LIQUIDADO" in c), None)
         col_pag = next((c for c in df.columns if "PAGO" in c), None)
 
         def limpar_valor(col):
-            if col and col in df.columns:
-                return pd.to_numeric(df[col].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False), errors='coerce').sum()
-            return 0.0
-
-        v_empenhado = limpar_valor(col_emp)
-        v_liquidado = limpar_valor(col_liquidado)
-        v_pago = limpar_valor(col_pago)
-
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            st.markdown('<div style="border-left: 5px solid #007bff; padding-left: 10px;"><b>VALOR EMPENHADO</b></div>', unsafe_allow_html=True)
-            st.metric("", formatar_moeda(v_empenhado))
-        with c2:
-            st.markdown('<div style="border-left: 5px solid #28a745; padding-left: 10px;"><b>VALOR LIQUIDADO</b></div>', unsafe_allow_html=True)
-            st.metric("", formatar_moeda(v_liquidado))
-        with c3:
-            st.markdown('<div style="border-left: 5px solid #ffc107; padding-left: 10px;"><b>VALOR PAGO</b></div>', unsafe_allow_html=True)
-        st.divider()
-
-    # 5. Exibição da Tabela
-    if df.empty:
-        st.warning("Nenhum dado de 2026 encontrado para os critérios selecionados.")
-    else:
-        total_linhas = len(df)
-        st.write(f"Registros de 2026 encontrados: **{total_linhas}**")
-        
-        termo = st.text_input("🔍 Filtrar resultados:", key="busca_radar")
-        if termo:
-            mask = df.astype(str).apply(lambda x: x.str.contains(termo, case=False)).any(axis=1)
-            df_final = df[mask]
-        else:
-            df_final = df
-
-        st.dataframe(df_final, use_container_width=True, hide_index=True)
+            if
