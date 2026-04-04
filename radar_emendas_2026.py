@@ -14,7 +14,7 @@ def formatar_moeda(valor):
 def exibir_radar():
     st.title("🏛️ Radar de Emendas 2026 - Dashboard")
     
-    tipo_visao = st.selectbox("Escolha a Visualização:", ["Visão Geral", "Por Favorecido"], key="select_dashboard_v12")
+    tipo_visao = st.selectbox("Escolha a Visualização:", ["Visão Geral", "Por Favorecido"], key="select_dashboard_v13")
 
     file_id = st.secrets.get("id_emendas_geral") if tipo_visao == "Visão Geral" else st.secrets.get("id_emendas_favorecido")
     nome_arquivo = f"base_dados_{file_id}.csv"
@@ -67,13 +67,12 @@ def exibir_radar():
         st.metric(f"💰 TOTAL ACUMULADO (2026)", formatar_moeda(total_fin))
         st.divider()
 
-        # --- AJUSTE: TOP 10 NATUREZA JURÍDICA ---
+        # 1. GRÁFICO: TOP 10 NATUREZA JURÍDICA
         col_nat = "Natureza Jurídica"
         if col_nat in df_exibir.columns:
             df_nat_counts = df_exibir[col_nat].value_counts().reset_index()
             df_nat_counts.columns = ['Natureza', 'Qtd']
             
-            # Seleciona os 10 primeiros e agrupa o resto em "Outros"
             top_10_nat = df_nat_counts.head(10).copy()
             outros_qtd = df_nat_counts.iloc[10:]['Qtd'].sum()
             
@@ -92,28 +91,18 @@ def exibir_radar():
 
         st.divider()
 
-        # 2. GRÁFICO POR UF (Top 10 para não encavalar as siglas)
+        # 2. GRÁFICO POR UF (LIMPO - SEM DUPLICIDADE DE ESCALA)
         col_uf = "UF Favorecido"
         if col_uf in df_exibir.columns:
             df_uf = df_exibir[col_uf].value_counts().reset_index().head(15)
             df_uf.columns = ['UF', 'Qtd']
             fig_uf = px.bar(df_uf, x='UF', y='Qtd', title="Volume de Emendas por UF (Top 15)", 
                             color='Qtd', color_continuous_scale='Viridis', height=400)
+            
+            # Remove a barra lateral repetida para limpar o layout
+            fig_uf.update_layout(coloraxis_showscale=False, margin=dict(l=20, r=20, t=50, b=20))
             st.plotly_chart(fig_uf, use_container_width=True)
 
         st.divider()
 
-        # 3. TOP 10 AUTORES
-        col_autor = next((c for c in df_exibir.columns if "Autor" in c), None)
-        if col_autor and col_valor:
-            top10_aut = df_exibir.groupby(col_autor)[col_valor].agg(['sum', 'count']).sort_values(by='sum', ascending=False).head(10).reset_index()
-            fig_aut = px.bar(top10_aut, x=col_autor, y='sum', text='count', 
-                             title="Ranking: Top 10 Autores (Valor Total)",
-                             labels={'sum': 'Total (R$)', 'count': 'Qtd'}, height=450)
-            fig_aut.update_layout(xaxis_tickangle=-45)
-            st.plotly_chart(fig_aut, use_container_width=True)
-
-        st.success(f"✅ {len(df_exibir)} registros analisados.")
-        st.dataframe(df_exibir, use_container_width=True, hide_index=True)
-    else:
-        st.warning("Sem dados para exibir.")
+        # 3. TOP
