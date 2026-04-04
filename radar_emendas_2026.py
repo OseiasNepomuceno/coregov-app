@@ -4,16 +4,6 @@ import gdown
 import os
 import unicodedata
 
-MAPA_ESTADOS = {
-    'AC': 'ACRE', 'AL': 'ALAGOAS', 'AP': 'AMAPA', 'AM': 'AMAZONAS', 'BA': 'BAHIA',
-    'CE': 'CEARA', 'DF': 'DISTRITO FEDERAL', 'ES': 'ESPIRITO SANTO', 'GO': 'GOIAS',
-    'MA': 'MARANHAO', 'MT': 'MATO GROSSO', 'MS': 'MATO GROSSO DO SUL', 'MG': 'MINAS GERAIS',
-    'PA': 'PARA', 'PB': 'PARAIBA', 'PR': 'PARANA', 'PE': 'PERNAMBUCO', 'PI': 'PIAUI',
-    'RJ': 'RIO DE JANEIRO', 'RN': 'RIO GRANDE DO NORTE', 'RS': 'RIO GRANDE DO SUL',
-    'RO': 'RONDONIA', 'RR': 'RORAIMA', 'SC': 'SANTA CATARINA', 'SP': 'SAO PAULO',
-    'SE': 'SERGIPE', 'TO': 'TOCANTINS'
-}
-
 def remover_acentos(texto):
     if not isinstance(texto, str): return str(texto)
     return "".join(c for c in unicodedata.normalize('NFD', texto) if unicodedata.category(c) != 'Mn').upper().strip()
@@ -24,71 +14,68 @@ def formatar_moeda(valor):
 def exibir_radar():
     st.title("🏛️ Radar de Emendas 2026")
     
-    tipo_visao = st.selectbox("Visualização:", ["Visão Geral", "Por Favorecido"], key="v_topo")
+    tipo_visao = st.selectbox("Visualização:", ["Visão Geral", "Por Favorecido"], key="v_final_topo")
 
     file_id = st.secrets.get("id_emendas_geral") if tipo_visao == "Visão Geral" else st.secrets.get("id_emendas_favorecido")
-    nome_arquivo = "base_emendas_2026.csv"
+    nome_arquivo = "base_emendas_limpa.csv"
 
-    if not os.path.exists(nome_arquivo):
+    if not os.path.exists(nome_arquivo) or st.button("🔄 Forçar Atualização de Dados"):
         if not file_id:
-            st.error("Erro: ID do arquivo não configurado."); return
-        with st.spinner("Sincronizando dados..."):
+            st.error("ID do arquivo não configurado."); return
+        with st.spinner("Baixando base de dados..."):
             url = f'https://drive.google.com/uc?id={file_id}'
-            gdown.download(url, nome_arquivo, quiet=False, fuzzy=True)
+            if os.path.exists(nome_arquivo): os.remove(nome_arquivo)
+            gdown.download(url, nome_arquivo, quiet=False)
 
     try:
-        # Lendo com separador ';' e encoding latin1
+        # Lendo com tratamento de erro para linhas problemáticas
         df = pd.read_csv(nome_arquivo, sep=';', encoding='latin1', on_bad_lines='skip', dtype=str)
         
-        # Limpeza de nomes de colunas: removemos espaços e mantemos o nome EXATO do arquivo
+        # Limpeza absoluta de nomes de colunas
         df.columns = [str(c).strip() for c in df.columns]
 
-        # --- FILTRO DE ANO 2026 (BASEADO NO SEU BLOCO DE NOTAS) ---
-        col_ano = "Ano da Emenda" 
+        # --- ESTRATÉGIA DE FILTRO POR POSIÇÃO (Caso o nome falhe) ---
+        # A segunda coluna (índice 1) no seu arquivo é o Ano
+        col_ano = "Ano da Emenda"
         
-        if col_ano in df.columns:
-            # Remove qualquer .0 que o pandas coloque e espaços
-            df[col_ano] = df[col_ano].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
-            # Filtro por 2026
-            df = df[df[col_ano] == "2026"]
-        else:
-            # Se ele não achar pelo nome exato, tenta achar qualquer coluna que contenha 'Ano'
-            col_alternativa = next((c for c in df.columns if "Ano" in c), None)
-            if col_alternativa:
-                df = df[df[col_alternativa].astype(str).str.contains("2026", na=False)]
+        if col_ano not in df.columns:
+            col_ano = df.columns[1] # Tenta a segunda coluna se o nome falhar
+
+        # Limpeza do Ano: Mantém apenas números
+        df[col_ano] = df[col_ano].astype(str).str.extract('(\d+)', expand=False)
+        
+        # Filtro definitivo
+        df = df[df[col_ano] == "2026"]
             
     except Exception as e:
-        st.error(f"Erro ao ler o arquivo: {e}"); return
+        st.error(f"Erro crítico na leitura: {e}"); return
 
-    # LÓGICA DE PERMISSÃO (PREMIUM)
+    # Lógica de Plano
     usuario = st.session_state.get('usuario_logado', {})
     plano = str(usuario.get('PLANO', 'BRONZE')).upper()
-    acesso_nacional = plano in ["PREMIUM", "DIAMANTE", "OURO"]
-
-    if acesso_nacional:
-        st.success("🔓 **Acesso Premium:** Visualizando dados nacionais")
+    
+    if plano in ["PREMIUM", "DIAMANTE", "OURO"]:
+        st.success("🔓 **Acesso Premium:** Brasil (2026)")
     else:
-        # Busca coluna de UF
-        col_uf = next((c for c in ["UF", "Estado", "UF_BENEFICIARIO"] if c in df.columns), None)
-        if col_uf:
-            sigla = str(usuario.get('LOCALIDADE') or "SP").upper()
-            estado_nome = remover_acentos(MAPA_ESTADOS.get(sigla, sigla))
-            df = df[df[col_uf].astype(str).apply(remover_acentos) == estado_nome]
-            st.info(f"📍 Localidade: {estado_nome}")
+        # Busca UF (Geralmente coluna 10 ou 11)
+        col_uf = next((c for c in df.columns if c.upper() in ["UF", "ESTADO"]), df.columns[10])
+        sigla = str(usuario.get('LOCALIDADE') or "SP").upper()
+        df = df[df[col_uf].astype(str).str.contains(sigla, na=False, case=False)]
+        st.info(f"📍 Localidade: {sigla}")
 
     if not df.empty:
         if tipo_visao == "Visão Geral":
-            def somar_coluna(termo):
-                # Busca colunas como 'Valor Empenhado', 'Valor Pago'
-                col = next((c for c in df.columns if termo in c), None)
+            def somar(termo):
+                col = next((c for c in df.columns if termo.upper() in c.upper()), None)
                 if col:
+                    # Converte padrão BR (1.234,56) para float (1234.56)
                     v = df[col].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
                     return pd.to_numeric(v, errors='coerce').sum()
                 return 0.0
 
-            v_emp = somar_coluna("Empenhado")
-            v_liq = somar_coluna("Liquidado")
-            v_pag = somar_coluna("Pago")
+            v_emp = somar("Empenhado")
+            v_liq = somar("Liquidado")
+            v_pag = somar("Pago")
 
             c1, c2, c3 = st.columns(3)
             c1.metric("EMPENHADO", formatar_moeda(v_emp))
@@ -96,10 +83,9 @@ def exibir_radar():
             c3.metric("PAGO", formatar_moeda(v_pag))
             st.divider()
 
-        st.write(f"📊 Registros encontrados: **{len(df)}**")
+        st.write(f"📊 Registros de 2026 encontrados: **{len(df)}**")
         st.dataframe(df, use_container_width=True, hide_index=True)
     else:
-        st.warning("⚠️ Nenhum registro de 2026 encontrado. Verifique o ano no arquivo.")
-        # Ajuda a debugar mostrando o que ele encontrou
-        if not df.empty:
-            st.write("Colunas disponíveis:", list(df.columns))
+        st.warning("⚠️ O arquivo foi lido, mas o ano '2026' não foi detectado nas colunas.")
+        # Ajuda a identificar o que está errado
+        st.write("Primeiras linhas detectadas para análise:", df.head(2))
