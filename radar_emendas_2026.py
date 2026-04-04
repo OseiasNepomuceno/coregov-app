@@ -11,10 +11,23 @@ def formatar_moeda(valor):
         return "R$ 0,00"
 
 def exibir_radar():
+    # Estilização para as Molduras dos Cards (Premium Look)
+    st.markdown("""
+        <style>
+        [data-testid="stMetricValue"] { font-size: 1.8rem; }
+        div[data-testid="metric-container"] {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            padding: 15px 10px;
+            border-radius: 10px;
+            box-shadow: 2px 2px 5px rgba(0,0,0,0.05);
+        }
+        </style>
+    """, unsafe_allow_html=True)
+
     st.title("🏛️ Radar de Emendas 2026 - Dashboard")
     
-    # Versão v18 para garantir que o Streamlit atualize o componente
-    tipo_visao = st.selectbox("Escolha a Visualização:", ["Visão Geral", "Por Favorecido"], key="select_dashboard_v18")
+    tipo_visao = st.selectbox("Escolha a Visualização:", ["Visão Geral", "Por Favorecido"], key="select_dashboard_v20")
 
     file_id = st.secrets.get("id_emendas_geral") if tipo_visao == "Visão Geral" else st.secrets.get("id_emendas_favorecido")
     nome_arquivo = f"base_dados_{file_id}.csv"
@@ -38,17 +51,13 @@ def exibir_radar():
         
         # Filtro de Ano 2026
         col_ano = next((c for c in df.columns if "Ano" in c or "ANO" in c), None)
-        if col_ano:
-            df_2026 = df[df[col_ano].fillna('').astype(str).str.contains("2026")].copy()
-        else:
-            df_2026 = df.copy()
+        df_2026 = df[df[col_ano].fillna('').astype(str).str.contains("2026")].copy() if col_ano else df.copy()
 
-        # --- PADRONIZAÇÃO DE COLUNAS DE VALOR PARA VISÃO GERAL ---
-        # Mapeia nomes possíveis para os nomes que você quer
+        # Limpeza e Padronização de Valores
         mapeamento = {
             "Valor Empenhado": ["Valor Empenhado", "Valor Total Empenhado", "VALOR EMPENHADO"],
             "Valor Liquidado": ["Valor Liquidado", "Valor Total Liquidado", "VALOR LIQUIDADO"],
-            "Valor Pago": ["Valor Pago", "Valor Total Pago", "VALOR PAGO"]
+            "Valor Pago": ["Valor Pago", "Valor Total Pago", "VALOR PAGO", "Valor Recebido"]
         }
 
         for destino, origens in mapeamento.items():
@@ -60,65 +69,45 @@ def exibir_radar():
                     break
 
         if tipo_visao == "Visão Geral":
-            # Lista exata solicitada
-            colunas_selecionadas = [
+            colunas_solicitadas = [
                 "Ano da Emenda", "Localidade de aplicação do recurso", "Município", 
                 "UF", "Região", "Nome do Programa", 
                 "Valor Empenhado", "Valor Liquidado", "Valor Pago"
             ]
-            # Só exibe as colunas que realmente existem ou foram criadas acima
-            colunas_finais = [c for c in colunas_selecionadas if c in df_2026.columns]
-            df_exibir = df_2026[colunas_finais].copy()
+            colunas_existentes = [c for c in colunas_solicitadas if c in df_2026.columns]
+            df_exibir = df_2026[colunas_existentes].copy()
         else:
-            # Lógica "Por Favorecido" mantida
             cols_fora = ["Código da Emenda", "Código do Favorecido"]
             df_exibir = df_2026.drop(columns=[c for c in cols_fora if c in df_2026.columns])
-            # Garante limpeza do valor para o Favorecido também
-            if "Valor Pago" in df_exibir.columns:
-                df_exibir["Valor Pago"] = pd.to_numeric(df_exibir["Valor Pago"], errors='coerce').fillna(0)
 
     except Exception as e:
-        st.error(f"Erro ao processar colunas: {e}"); return
+        st.error(f"Erro no processamento: {e}"); return
 
     if not df_exibir.empty:
         st.markdown(f"## 📊 {tipo_visao} 2026")
         
-        # --- CARDS DO TOPO ---
+        # --- CARDS COM MOLDURA ---
         if tipo_visao == "Visão Geral":
             c1, c2, c3 = st.columns(3)
             with c1: st.metric("💰 Total Empenhado", formatar_moeda(df_exibir["Valor Empenhado"].sum() if "Valor Empenhado" in df_exibir.columns else 0))
             with c2: st.metric("💸 Total Liquidado", formatar_moeda(df_exibir["Valor Liquidado"].sum() if "Valor Liquidado" in df_exibir.columns else 0))
             with c3: st.metric("✅ Total Pago", formatar_moeda(df_exibir["Valor Pago"].sum() if "Valor Pago" in df_exibir.columns else 0))
+            st.divider()
         else:
             v_pago = df_exibir["Valor Pago"].sum() if "Valor Pago" in df_exibir.columns else 0
             st.metric("💰 TOTAL PAGO ACUMULADO", formatar_moeda(v_pago))
-        
-        st.divider()
+            st.divider()
 
-        # --- GRÁFICOS ---
-        # 1. Natureza Jurídica (Sempre que disponível)
-        if "Natureza Jurídica" in df_2026.columns:
-            df_nat = df_2026["Natureza Jurídica"].value_counts().reset_index().head(10)
-            fig_nat = px.pie(df_nat, names='Natureza Jurídica', values='count', title="Natureza Jurídica (%)", hole=0.4, height=400)
-            fig_nat.update_layout(legend=dict(orientation="h", y=-0.2))
-            st.plotly_chart(fig_nat, use_container_width=True)
-
-        # 2. Ranking de Programas (Visão Geral) ou Autores (Favorecido)
-        if tipo_visao == "Visão Geral":
-            col_rank = "Nome do Programa"
-            col_val = "Valor Empenhado"
-        else:
+            # Gráficos específicos apenas para a visão "Por Favorecido"
             col_rank = next((c for c in df_exibir.columns if "Autor" in c and "Código" not in c), None)
-            col_val = "Valor Pago"
+            if col_rank and "Valor Pago" in df_exibir.columns:
+                top10 = df_exibir.groupby(col_rank)["Valor Pago"].sum().sort_values(ascending=False).head(10).reset_index()
+                fig_rank = px.bar(top10, x=col_rank, y="Valor Pago", title="Top 10: Autores", height=500, color="Valor Pago", color_continuous_scale='Blues')
+                fig_rank.update_layout(xaxis_tickangle=-45, coloraxis_showscale=False, margin=dict(b=150))
+                st.plotly_chart(fig_rank, use_container_width=True)
 
-        if col_rank and col_val in df_exibir.columns:
-            top10 = df_exibir.groupby(col_rank)[col_val].sum().sort_values(ascending=False).head(10).reset_index()
-            fig_rank = px.bar(top10, x=col_rank, y=col_val, title=f"Top 10: {col_rank}", height=500, color=col_val, color_continuous_scale='Blues')
-            fig_rank.update_layout(xaxis_tickangle=-45, coloraxis_showscale=False, margin=dict(b=150))
-            st.plotly_chart(fig_rank, use_container_width=True)
-
-        # Tabela Final
-        st.success(f"Tabela filtrada para {tipo_visao}")
+        # Tabela Final (Comum a ambos, mas com colunas filtradas na Visão Geral)
+        st.success(f"Tabela detalhada para {tipo_visao}")
         st.dataframe(df_exibir, use_container_width=True, hide_index=True)
     else:
         st.warning("Nenhum dado de 2026 encontrado.")
