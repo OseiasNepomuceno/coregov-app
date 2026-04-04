@@ -51,11 +51,13 @@ def exibir_radar():
         df = pd.read_csv(nome_arquivo, sep=None, engine='python', encoding='latin1', on_bad_lines='skip')
         df.columns = [str(c).strip().upper() for c in df.columns]
 
-        # --- FILTRO DE ANO 2026 ---
+        # --- SOLUÇÃO DEFINITIVA: FILTRO DE ANO 2026 ---
         coluna_ano = next((c for c in df.columns if "ANO" in c), None)
         if coluna_ano:
-            df[coluna_ano] = pd.to_numeric(df[coluna_ano], errors='coerce')
-            df = df[df[coluna_ano] == 2026]
+            # Converte para string, remove o ".0" (comum em números no pandas) e remove espaços
+            df[coluna_ano] = df[coluna_ano].astype(str).str.replace('.0', '', regex=False).str.strip()
+            # Filtra onde o texto "2026" estiver presente
+            df = df[df[coluna_ano].str.contains("2026", na=False)]
             
     except Exception as e:
         st.error(f"Erro ao processar arquivo: {e}")
@@ -64,7 +66,7 @@ def exibir_radar():
     # 3. Lógica de Segurança por Estado (UF)
     usuario = st.session_state.get('usuario_logado', {})
     plano = str(usuario.get('PLANO', 'BRONZE')).upper()
-    sigla_usuario = str(usuario.get('LOCALIDADE') or "RJ").strip().upper()
+    sigla_usuario = str(usuario.get('LOCALIDADE') or "SP").strip().upper()
     nome_completo_busca = remover_acentos(MAPA_ESTADOS.get(sigla_usuario, sigla_usuario))
     acesso_nacional = (plano in ["PREMIUM", "DIAMANTE", "OURO"])
 
@@ -84,6 +86,7 @@ def exibir_radar():
 
         def limpar_valor(col):
             if col and col in df.columns:
+                # Limpeza de strings financeiras para conversão numérica
                 return pd.to_numeric(df[col].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False), errors='coerce').sum()
             return 0.0
 
@@ -110,7 +113,7 @@ def exibir_radar():
         total_linhas = len(df)
         st.write(f"Registros de 2026 encontrados: **{total_linhas}**")
         
-        termo = st.text_input("🔍 Filtrar resultados:", key="busca_radar")
+        termo = st.text_input("🔍 Filtrar resultados (Cidade, Deputado, CNPJ):", key="busca_radar")
         if termo:
             mask = df.astype(str).apply(lambda x: x.str.contains(termo, case=False)).any(axis=1)
             df_final = df[mask]
