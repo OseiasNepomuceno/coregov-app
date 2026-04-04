@@ -37,70 +37,74 @@ def exibir_radar():
 
     if not os.path.exists(nome_arquivo):
         if not file_id:
-            st.error(f"ID de arquivo não configurado.")
+            st.error("ID do arquivo não encontrado nos Secrets.")
             return
-        with st.spinner(f"Sincronizando base..."):
+        with st.spinner("Baixando base de dados..."):
             url = f'https://drive.google.com/uc?id={file_id}'
             gdown.download(url, nome_arquivo, quiet=False, fuzzy=True)
 
     try:
-        # Lendo com o separador CORRETO do seu arquivo (;)
-        df = pd.read_csv(nome_arquivo, sep=';', encoding='latin1', on_bad_lines='skip')
+        # Lendo com separador ';' e forçando leitura de colunas como texto para evitar erros científicos
+        df = pd.read_csv(nome_arquivo, sep=';', encoding='latin1', on_bad_lines='skip', dtype=str)
         df.columns = [str(c).strip().upper() for c in df.columns]
 
-        # FILTRO DE ANO ULTRA-FORTE
-        coluna_ano = 'ANO DA EMENDA'
-        if coluna_ano in df.columns:
-            # Forçamos para texto e removemos qualquer coisa que não seja o número
-            df[coluna_ano] = df[coluna_ano].astype(str).str.extract('(\d+)')[0]
-            df = df[df[coluna_ano] == "2026"]
-
-        # LÓGICA PREMIUM
-        usuario = st.session_state.get('usuario_logado', {})
-        plano = str(usuario.get('PLANO', 'BRONZE')).upper()
-        acesso_nacional = plano in ["PREMIUM", "DIAMANTE", "OURO"]
+        # --- FILTRO DE ANO RESILIENTE ---
+        coluna_ano = next((c for c in df.columns if "ANO" in c), None)
         
-        coluna_uf = next((c for c in ["UF", "ESTADO", "UF_BENEFICIARIO", "SG_UF"] if c in df.columns), None)
-
-        if not acesso_nacional and coluna_uf:
-            sigla_user = str(usuario.get('LOCALIDADE') or "SP").strip().upper()
-            estado_busca = remover_acentos(MAPA_ESTADOS.get(sigla_user, sigla_user))
-            df['UF_CHECK'] = df[coluna_uf].astype(str).apply(remover_acentos)
-            df = df[df['UF_CHECK'] == estado_busca]
-            st.info(f"📍 Filtro aplicado: {estado_busca}")
-        else:
-            st.success("🔓 **Acesso Premium:** Visualizando dados nacionais")
-
+        if coluna_ano:
+            # Mantém apenas as linhas onde '2026' aparece em qualquer lugar da célula
+            df = df[df[coluna_ano].str.contains("2026", na=False)]
+            
     except Exception as e:
-        st.error(f"Erro ao processar: {e}")
+        st.error(f"Erro na leitura: {e}")
         return
 
-    if not df.empty:
-        if tipo_visao == "Visão Geral":
-            c_emp = next((c for c in df.columns if "EMPENHADO" in c), None)
-            c_liq = next((c for c in df.columns if "LIQUIDADO" in c), None)
-            c_pag = next((c for c in df.columns if "PAGO" in c), None)
+    # LÓGICA DE PERMISSÃO (PREMIUM)
+    usuario = st.session_state.get('usuario_logado', {})
+    plano = str(usuario.get('PLANO', 'BRONZE')).upper()
+    acesso_nacional = plano in ["PREMIUM", "DIAMANTE", "OURO"]
 
-            def conv(c):
-                if c and c in df.columns:
-                    # Limpeza para padrão brasileiro (ponto no milhar, vírgula no decimal)
-                    valores = df[c].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
-                    return pd.to_numeric(valores, errors='coerce').sum()
+    if acesso_nacional:
+        st.success("🔓 **Acesso Premium:** Visualizando dados nacionais de 2026")
+    else:
+        coluna_uf = next((c for c in ["UF", "ESTADO", "SG_UF"] if c in df.columns), None)
+        if coluna_uf:
+            sigla = str(usuario.get('LOCALIDADE') or "SP").upper()
+            estado = remover_acentos(MAPA_ESTADOS.get(sigla, sigla))
+            df = df[df[coluna_uf].astype(str).apply(remover_acentos) == estado]
+            st.info(f"📍 Exibindo: {estado}")
+
+    if not df.empty:
+        # Cards Financeiros
+        if tipo_visao == "Visão Geral":
+            def soma_valor(termo):
+                col = next((c for c in df.columns if termo in c), None)
+                if col:
+                    # Limpa R$, pontos e converte vírgula em ponto para somar
+                    v = df[col].str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
+                    return pd.to_numeric(v, errors='coerce').sum()
                 return 0.0
 
-            v1, v2, v3 = conv(c_emp), conv(c_liq), conv(c_pag)
-            m1, m2, m3 = st.columns(3)
-            m1.metric("EMPENHADO", formatar_moeda(v1))
-            m2.metric("LIQUIDADO", formatar_moeda(v2))
-            m3.metric("PAGO", formatar_moeda(v3))
+            v_emp = soma_valor("EMPENHADO")
+            v_liq = soma_valor("LIQUIDADO")
+            v_pag = soma_valor("PAGO")
+
+            c1, c2, c3 = st.columns(3)
+            c1.metric("EMPENHADO", formatar_moeda(v_emp))
+            c2.metric("LIQUIDADO", formatar_moeda(v_liq))
+            c3.metric("PAGO", formatar_moeda(v_pag))
             st.divider()
 
-        st.write(f"📊 Registros de 2026: **{len(df)}**")
-        busca = st.text_input("🔍 Pesquisar:", key="search_radar")
+        st.write(f"📊 Foram encontrados **{len(df)}** registros para 2026.")
+        
+        busca = st.text_input("🔍 Filtrar na tabela:", key="busca_final")
         if busca:
             mask = df.astype(str).apply(lambda x: x.str.contains(busca, case=False)).any(axis=1)
             st.dataframe(df[mask], use_container_width=True, hide_index=True)
         else:
             st.dataframe(df, use_container_width=True, hide_index=True)
     else:
-        st.warning("Nenhum dado encontrado. Tente atualizar a página.")
+        st.warning("⚠️ O filtro foi aplicado, mas a planilha não retornou dados para 2026.")
+        # Debug para você ver o que o código está lendo (apenas para teste)
+        if coluna_ano:
+             st.write("Anos encontrados na planilha (Top 5):", df[coluna_ano].unique()[:5] if not df.empty else "Nenhum")
