@@ -14,7 +14,7 @@ def formatar_moeda(valor):
 def exibir_radar():
     st.title("🏛️ Radar de Emendas 2026 - Dashboard")
     
-    tipo_visao = st.selectbox("Escolha a Visualização:", ["Visão Geral", "Por Favorecido"], key="select_dashboard_v14")
+    tipo_visao = st.selectbox("Escolha a Visualização:", ["Visão Geral", "Por Favorecido"], key="select_dashboard_v15")
 
     file_id = st.secrets.get("id_emendas_geral") if tipo_visao == "Visão Geral" else st.secrets.get("id_emendas_favorecido")
     nome_arquivo = f"base_dados_{file_id}.csv"
@@ -77,7 +77,7 @@ def exibir_radar():
             outros_qtd = df_nat_counts.iloc[10:]['Qtd'].sum()
             
             if outros_qtd > 0:
-                novo_outro = pd.DataFrame([{'Natureza': 'Outras Naturezas', 'Qtd':粉 outros_qtd}])
+                novo_outro = pd.DataFrame([{'Natureza': 'Outras Naturezas', 'Qtd': outros_qtd}])
                 top_10_nat = pd.concat([top_10_nat, novo_outro], ignore_index=True)
 
             fig_pie = px.pie(top_10_nat, names='Natureza', values='Qtd', 
@@ -91,7 +91,7 @@ def exibir_radar():
 
         st.divider()
 
-        # 2. GRÁFICO POR UF (LIMPO)
+        # 2. GRÁFICO POR UF
         col_uf = "UF Favorecido"
         if col_uf in df_exibir.columns:
             df_uf = df_exibir[col_uf].value_counts().reset_index().head(15)
@@ -105,10 +105,9 @@ def exibir_radar():
         st.divider()
 
         # 3. TOP 10 AUTORES (POR NOME)
-        # Identifica dinamicamente a coluna de nome (ignora colunas de ID/Código)
         col_autor_nome = next((c for c in df_exibir.columns if "Autor" in c and "Código" not in c), None)
         
-        if not col_autor_nome: # Fallback caso a lógica de exclusão não encontre
+        if not col_autor_nome:
             col_autor_nome = next((c for c in df_exibir.columns if "Autor" in c), None)
 
         if col_autor_nome and col_valor:
@@ -120,14 +119,14 @@ def exibir_radar():
                              text='count', 
                              title="Ranking: Top 10 Autores (Valor Total em R$)",
                              labels={'sum': 'Total (R$)', 'count': 'Qtd Emendas', col_autor_nome: 'Parlamentar'},
-                             height=550, # Altura maior para acomodar nomes e legendas
+                             height=550, 
                              color='sum', 
                              color_continuous_scale='Blues')
             
             fig_aut.update_layout(
                 xaxis_tickangle=-45, 
                 coloraxis_showscale=False, 
-                margin=dict(b=150) # Margem inferior aumentada para nomes longos
+                margin=dict(b=150)
             )
             fig_aut.update_traces(textposition='outside')
             st.plotly_chart(fig_aut, use_container_width=True)
