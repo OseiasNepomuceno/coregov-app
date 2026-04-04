@@ -31,15 +31,13 @@ def exibir_radar():
 
     # IDs do Drive
     if tipo_visao == "Visão Geral":
-       # Para Visão Geral
         file_id = st.secrets.get("id_emendas_geral")
         nome_arquivo = "2026_Emendas_Geral.csv"
     else:
-        # Para Visão por Favorecido
         file_id = st.secrets.get("id_emendas_favorecido")
         nome_arquivo = "2026_Emendas_Favorecido.csv"
 
-    # 1. Download (Sincronização)
+    # 1. Download
     if not os.path.exists(nome_arquivo):
         if not file_id:
             st.error(f"ID de arquivo não configurado para {tipo_visao}.")
@@ -52,11 +50,24 @@ def exibir_radar():
     try:
         df = pd.read_csv(nome_arquivo, sep=None, engine='python', encoding='latin1', on_bad_lines='skip')
         df.columns = [str(c).strip().upper() for c in df.columns]
-        
-        # --- FILTRO DE ANO 2026 (OBRIGATÓRIO) ---
+
+        # --- TESTE RÁPIDO DE DEPURAÇÃO (Pode remover após consertar) ---
+        with st.expander("🛠️ Debug: Diagnóstico da Planilha"):
+            st.write(f"Arquivo lido: {nome_arquivo}")
+            st.write(f"Total de linhas brutas: {len(df)}")
+            st.write(f"Colunas detectadas: {df.columns.tolist()}")
+            if not df.empty:
+                col_ano_debug = next((c for c in df.columns if "ANO" in c), None)
+                if col_ano_debug:
+                    anos_unicos = df[col_ano_debug].unique()
+                    st.write(f"Anos encontrados na coluna {col_ano_debug}: {anos_unicos}")
+        # --------------------------------------------------------------
+
+        # --- FILTRO DE ANO 2026 ---
         coluna_ano = next((c for c in df.columns if "ANO" in c), None)
         if coluna_ano:
             df = df[df[coluna_ano].astype(str).str.contains("2026", na=False)]
+            
     except Exception as e:
         st.error(f"Erro ao processar arquivo: {e}")
         return
@@ -76,8 +87,7 @@ def exibir_radar():
         df = df.drop(columns=['UF_AUX'])
         st.info(f"📍 Exibindo: **{nome_completo_busca}**")
 
-    # --- 4. CÁLCULO E EXIBIÇÃO DOS CARDS FINANCEIROS (CORREÇÃO APLICADA) ---
-    # Só entra aqui se for Visão Geral. Se for Favorecido, o bloco é ignorado.
+    # 4. Cards Financeiros
     if tipo_visao == "Visão Geral" and not df.empty:
         col_emp = next((c for c in df.columns if "EMPENHADO" in c), None)
         col_liq = next((c for c in df.columns if "LIQUIDADO" in c), None)
@@ -89,10 +99,9 @@ def exibir_radar():
             return 0.0
 
         v_empenhado = limpar_valor(col_emp)
-        v_liquidado = limpar_valor(col_liq)
-        v_pago = limpar_valor(col_pag)
+        v_liquidado = limpar_valor(col_liquidado)
+        v_pago = limpar_valor(col_pago)
 
-        # Renderização dos cards
         c1, c2, c3 = st.columns(3)
         with c1:
             st.markdown('<div style="border-left: 5px solid #007bff; padding-left: 10px;"><b>VALOR EMPENHADO</b></div>', unsafe_allow_html=True)
@@ -102,8 +111,6 @@ def exibir_radar():
             st.metric("", formatar_moeda(v_liquidado))
         with c3:
             st.markdown('<div style="border-left: 5px solid #ffc107; padding-left: 10px;"><b>VALOR PAGO</b></div>', unsafe_allow_html=True)
-            st.metric("", formatar_moeda(v_pago))
-        
         st.divider()
 
     # 5. Exibição da Tabela
@@ -113,7 +120,7 @@ def exibir_radar():
         total_linhas = len(df)
         st.write(f"Registros de 2026 encontrados: **{total_linhas}**")
         
-        termo = st.text_input("🔍 Filtrar resultados (Cidade, Deputado, CNPJ):", key="busca_radar")
+        termo = st.text_input("🔍 Filtrar resultados:", key="busca_radar")
         if termo:
             mask = df.astype(str).apply(lambda x: x.str.contains(termo, case=False)).any(axis=1)
             df_final = df[mask]
