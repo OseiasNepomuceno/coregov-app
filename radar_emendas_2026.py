@@ -14,7 +14,7 @@ def formatar_moeda(valor):
 def exibir_radar():
     st.title("🏛️ Radar de Emendas 2026 - Dashboard")
     
-    tipo_visao = st.selectbox("Escolha a Visualização:", ["Visão Geral", "Por Favorecido"], key="select_dashboard_v11")
+    tipo_visao = st.selectbox("Escolha a Visualização:", ["Visão Geral", "Por Favorecido"], key="select_dashboard_v12")
 
     file_id = st.secrets.get("id_emendas_geral") if tipo_visao == "Visão Geral" else st.secrets.get("id_emendas_favorecido")
     nome_arquivo = f"base_dados_{file_id}.csv"
@@ -39,12 +39,10 @@ def exibir_radar():
 
         df.columns = [str(c).replace('"', '').strip() for c in df.columns]
         
-        # Filtro de Ano
         col_ano = next((c for c in df.columns if "Ano" in c or "ANO" in c), df.columns[1])
         df[col_ano] = df[col_ano].fillna('').astype(str).str.strip()
         df_2026 = df[df[col_ano].str.startswith("2026")].copy()
 
-        # Identificação de Valor
         possibilidades = ["Valor Recebido", "Valor Pago", "Valor Liquidado", "Valor Empenhado"]
         col_valor = next((c for c in possibilidades if c in df_2026.columns), None)
 
@@ -65,48 +63,57 @@ def exibir_radar():
     if not df_exibir.empty:
         st.markdown("### 📊 Indicadores Estratégicos 2026")
         
-        # 1. CARD DE VALOR (Em destaque no topo)
         total_fin = df_exibir[col_valor].sum() if col_valor else 0
         st.metric(f"💰 TOTAL ACUMULADO (2026)", formatar_moeda(total_fin))
         st.divider()
 
-        # 2. GRÁFICO DE PIZZA (Largura Total)
+        # --- AJUSTE: TOP 10 NATUREZA JURÍDICA ---
         col_nat = "Natureza Jurídica"
         if col_nat in df_exibir.columns:
-            df_nat = df_exibir[col_nat].value_counts().reset_index()
-            df_nat.columns = ['Natureza', 'Qtd']
-            fig_pie = px.pie(df_nat, names='Natureza', values='Qtd', 
-                             title="Distribuição por Natureza Jurídica (%)", 
-                             hole=0.4, height=400)
-            # Legenda agora pode ficar na lateral ou embaixo com folga
-            fig_pie.update_layout(legend=dict(orientation="h", y=-0.1))
+            df_nat_counts = df_exibir[col_nat].value_counts().reset_index()
+            df_nat_counts.columns = ['Natureza', 'Qtd']
+            
+            # Seleciona os 10 primeiros e agrupa o resto em "Outros"
+            top_10_nat = df_nat_counts.head(10).copy()
+            outros_qtd = df_nat_counts.iloc[10:]['Qtd'].sum()
+            
+            if outros_qtd > 0:
+                novo_outro = pd.DataFrame([{'Natureza': 'Outras Naturezas', 'Qtd': outros_qtd}])
+                top_10_nat = pd.concat([top_10_nat, novo_outro], ignore_index=True)
+
+            fig_pie = px.pie(top_10_nat, names='Natureza', values='Qtd', 
+                             title="Top 10 Naturezas Jurídicas (%)", 
+                             hole=0.4, height=500,
+                             color_discrete_sequence=px.colors.qualitative.Pastel)
+            
+            fig_pie.update_layout(legend=dict(orientation="h", y=-0.2, xanchor="center", x=0.5))
+            fig_pie.update_traces(textinfo='percent+label')
             st.plotly_chart(fig_pie, use_container_width=True)
 
         st.divider()
 
-        # 3. GRÁFICO POR UF FAVORECIDO (Largura Total)
+        # 2. GRÁFICO POR UF (Top 10 para não encavalar as siglas)
         col_uf = "UF Favorecido"
         if col_uf in df_exibir.columns:
-            df_uf = df_exibir[col_uf].value_counts().reset_index()
+            df_uf = df_exibir[col_uf].value_counts().reset_index().head(15)
             df_uf.columns = ['UF', 'Qtd']
-            fig_uf = px.bar(df_uf, x='UF', y='Qtd', title="Quantidade de Emendas por UF Favorecido", 
-                            color='Qtd', color_continuous_scale='Blues', height=350)
+            fig_uf = px.bar(df_uf, x='UF', y='Qtd', title="Volume de Emendas por UF (Top 15)", 
+                            color='Qtd', color_continuous_scale='Viridis', height=400)
             st.plotly_chart(fig_uf, use_container_width=True)
 
         st.divider()
 
-        # 4. TOP 10 AUTORES (Largura Total)
+        # 3. TOP 10 AUTORES
         col_autor = next((c for c in df_exibir.columns if "Autor" in c), None)
         if col_autor and col_valor:
-            top10 = df_exibir.groupby(col_autor)[col_valor].agg(['sum', 'count']).sort_values(by='sum', ascending=False).head(10).reset_index()
-            fig_aut = px.bar(top10, x=col_autor, y='sum', text='count', 
-                             title="Ranking: Top 10 Autores (Valor Total x Qtd de Emendas)",
-                             labels={'sum': 'Total (R$)', 'count': 'Qtd'}, height=400)
+            top10_aut = df_exibir.groupby(col_autor)[col_valor].agg(['sum', 'count']).sort_values(by='sum', ascending=False).head(10).reset_index()
+            fig_aut = px.bar(top10_aut, x=col_autor, y='sum', text='count', 
+                             title="Ranking: Top 10 Autores (Valor Total)",
+                             labels={'sum': 'Total (R$)', 'count': 'Qtd'}, height=450)
             fig_aut.update_layout(xaxis_tickangle=-45)
             st.plotly_chart(fig_aut, use_container_width=True)
 
-        # TABELA FINAL
-        st.success(f"✅ {len(df_exibir)} registros carregados.")
+        st.success(f"✅ {len(df_exibir)} registros analisados.")
         st.dataframe(df_exibir, use_container_width=True, hide_index=True)
     else:
-        st.warning("Aguardando dados de 2026...")
+        st.warning("Sem dados para exibir.")
