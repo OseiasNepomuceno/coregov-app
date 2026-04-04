@@ -14,10 +14,8 @@ def formatar_moeda(valor):
 def exibir_radar():
     st.title("🏛️ Radar de Emendas 2026 - Dashboard")
     
-    # Seleção de Visão
-    tipo_visao = st.selectbox("Escolha a Visualização:", ["Visão Geral", "Por Favorecido"], key="select_dashboard_v16")
+    tipo_visao = st.selectbox("Escolha a Visualização:", ["Visão Geral", "Por Favorecido"], key="select_dashboard_v17")
 
-    # IDs do Drive baseados na visão
     file_id = st.secrets.get("id_emendas_geral") if tipo_visao == "Visão Geral" else st.secrets.get("id_emendas_favorecido")
     nome_arquivo = f"base_dados_{file_id}.csv"
 
@@ -35,36 +33,44 @@ def exibir_radar():
             gdown.download(url, nome_arquivo, quiet=False)
 
     try:
-        # Carregamento robusto
         df = pd.read_csv(nome_arquivo, sep=';', encoding='latin1', on_bad_lines='skip', dtype=str)
         if len(df.columns) < 5:
             df = pd.read_csv(nome_arquivo, sep=',', encoding='latin1', on_bad_lines='skip', dtype=str)
 
-        # Limpeza de nomes de colunas
         df.columns = [str(c).replace('"', '').strip() for c in df.columns]
         
-        # Filtro de Ano (Comum a ambos)
+        # Filtro de Ano 2026
         col_ano = next((c for c in df.columns if "Ano" in c or "ANO" in c), df.columns[1])
         df[col_ano] = df[col_ano].fillna('').astype(str).str.strip()
         df_2026 = df[df[col_ano].str.startswith("2026")].copy()
 
-        # Identificação de Coluna de Valor
-        possibilidades = ["Valor Recebido", "Valor Pago", "Valor Liquidado", "Valor Empenhado", "Valor Atualizado"]
-        col_valor = next((c for c in possibilidades if c in df_2026.columns), None)
+        # Função interna para limpar valores financeiros
+        def limpar_valor(col):
+            if col in df_2026.columns:
+                df_2026[col] = df_2026[col].astype(str).str.replace('R$', '', regex=False).str.strip()
+                df_2026[col] = df_2026[col].str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
+                df_2026[col] = pd.to_numeric(df_2026[col], errors='coerce').fillna(0)
 
-        if col_valor:
-            df_2026[col_valor] = df_2026[col_valor].astype(str).str.replace('R$', '', regex=False).str.strip()
-            df_2026[col_valor] = df_2026[col_valor].str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
-            df_2026[col_valor] = pd.to_numeric(df_2026[col_valor], errors='coerce').fillna(0)
-        
-        # --- LÓGICA DE SEPARAÇÃO DE VISÕES (O "CORAÇÃO" DO AJUSTE) ---
-        if tipo_visao == "Por Favorecido":
+        # Colunas de valores para a Visão Geral
+        cols_financeiras = ["Valor Empenhado", "Valor Liquidado", "Valor Pago"]
+        for c in cols_financeiras:
+            limpar_valor(c)
+
+        # --- LÓGICA ESPECÍFICA DE COLUNAS ---
+        if tipo_visao == "Visão Geral":
+            colunas_permitidas = [
+                "Ano da Emenda", "Localidade de aplicação do recurso", "Município", 
+                "UF", "Região", "Nome do Programa", 
+                "Valor Empenhado", "Valor Liquidado", "Valor Pago"
+            ]
+            # Filtra apenas as colunas que existem no arquivo
+            df_exibir = df_2026[[c for c in colunas_permitidas if c in df_2026.columns]].copy()
+            col_referencia_grafico = "Valor Empenhado" # Usado para os rankings nesta visão
+        else:
+            # Mantém a lógica do "Por Favorecido" intacta
             cols_fora = ["Código da Emenda", "Código do Favorecido"]
             df_exibir = df_2026.drop(columns=[c for c in cols_fora if c in df_2026.columns])
-        else:
-            # Aqui faremos os ajustes específicos para Visão Geral futuramente
-            # Por enquanto, mantemos a base completa de 2026
-            df_exibir = df_2026.copy()
+            col_referencia_grafico = next((c for c in ["Valor Recebido", "Valor Pago"] if c in df_exibir.columns), "Valor Pago")
 
     except Exception as e:
         st.error(f"Erro no processamento: {e}"); return
@@ -72,67 +78,50 @@ def exibir_radar():
     if not df_exibir.empty:
         st.markdown(f"### 📊 Indicadores Estratégicos 2026 ({tipo_visao})")
         
-        # Métrica Principal
-        total_fin = df_exibir[col_valor].sum() if col_valor else 0
-        st.metric(f"💰 TOTAL ACUMULADO (2026)", formatar_moeda(total_fin))
+        # --- CARDS DO TOPO (VISÃO GERAL) ---
+        if tipo_visao == "Visão Geral":
+            c1, c2, c3 = st.columns(3)
+            with c1: st.metric("💰 Total Empenhado", formatar_moeda(df_exibir["Valor Empenhado"].sum() if "Valor Empenhado" in df_exibir.columns else 0))
+            with c2: st.metric("💸 Total Liquidado", formatar_moeda(df_exibir["Valor Liquidado"].sum() if "Valor Liquidado" in df_exibir.columns else 0))
+            with c3: st.metric("✅ Total Pago", formatar_moeda(df_exibir["Valor Pago"].sum() if "Valor Pago" in df_exibir.columns else 0))
+        else:
+            total_fin = df_exibir[col_referencia_grafico].sum() if col_referencia_grafico in df_exibir.columns else 0
+            st.metric(f"💰 TOTAL ACUMULADO (2026)", formatar_moeda(total_fin))
+        
         st.divider()
 
-        # 1. GRÁFICO: NATUREZA JURÍDICA (Top 10 + Outros)
+        # 1. GRÁFICO: NATUREZA JURÍDICA (Se existir na Visão Geral ou Favorecido)
         col_nat = "Natureza Jurídica"
-        if col_nat in df_exibir.columns:
-            df_nat_counts = df_exibir[col_nat].value_counts().reset_index()
+        if col_nat in df_2026.columns: # Buscamos no DF original pois a Visão Geral pode ter filtrado essa coluna da tabela
+            df_nat_counts = df_2026[col_nat].value_counts().reset_index().head(10)
             df_nat_counts.columns = ['Natureza', 'Qtd']
-            
-            top_10_nat = df_nat_counts.head(10).copy()
-            outros_qtd = df_nat_counts.iloc[10:]['Qtd'].sum()
-            
-            if outros_qtd > 0:
-                novo_outro = pd.DataFrame([{'Natureza': 'Outras Naturezas', 'Qtd': outros_qtd}])
-                top_10_nat = pd.concat([top_10_nat, novo_outro], ignore_index=True)
-
-            fig_pie = px.pie(top_10_nat, names='Natureza', values='Qtd', 
-                             title="Distribuição por Natureza Jurídica (%)", 
-                             hole=0.4, height=500,
-                             color_discrete_sequence=px.colors.qualitative.Pastel)
-            
-            fig_pie.update_layout(legend=dict(orientation="h", y=-0.2, xanchor="center", x=0.5))
-            fig_pie.update_traces(textinfo='percent+label')
+            fig_pie = px.pie(df_nat_counts, names='Natureza', values='Qtd', title="Natureza Jurídica (%)", hole=0.4, height=450)
+            fig_pie.update_layout(legend=dict(orientation="h", y=-0.2))
             st.plotly_chart(fig_pie, use_container_width=True)
+            st.divider()
 
-        st.divider()
-
-        # 2. GRÁFICO POR UF (Limpo)
-        col_uf = "UF Favorecido" if "UF Favorecido" in df_exibir.columns else "UF"
+        # 2. GRÁFICO POR UF
+        col_uf = "UF" if tipo_visao == "Visão Geral" else "UF Favorecido"
         if col_uf in df_exibir.columns:
             df_uf = df_exibir[col_uf].value_counts().reset_index().head(15)
             df_uf.columns = ['UF', 'Qtd']
-            fig_uf = px.bar(df_uf, x='UF', y='Qtd', title="Volume de Emendas por UF (Top 15)", 
+            fig_uf = px.bar(df_uf, x='UF', y='Qtd', title=f"Volume de Emendas por {col_uf}", 
                             color='Qtd', color_continuous_scale='Viridis', height=400)
-            
-            fig_uf.update_layout(coloraxis_showscale=False, margin=dict(l=20, r=20, t=50, b=20))
+            fig_uf.update_layout(coloraxis_showscale=False)
             st.plotly_chart(fig_uf, use_container_width=True)
+            st.divider()
 
-        st.divider()
+        # 3. RANKING (Top 10 Programa ou Autor)
+        col_rank = "Nome do Programa" if tipo_visao == "Visão Geral" else next((c for c in df_exibir.columns if "Autor" in c and "Código" not in c), None)
+        
+        if col_rank and col_referencia_grafico in df_exibir.columns:
+            top10 = df_exibir.groupby(col_rank)[col_referencia_grafico].sum().sort_values(ascending=False).head(10).reset_index()
+            fig_rank = px.bar(top10, x=col_rank, y=col_referencia_grafico, title=f"Top 10: {col_rank}",
+                             height=500, color=col_referencia_grafico, color_continuous_scale='Blues')
+            fig_rank.update_layout(xaxis_tickangle=-45, coloraxis_showscale=False, margin=dict(b=150))
+            st.plotly_chart(fig_rank, use_container_width=True)
 
-        # 3. TOP 10 AUTORES (Dinâmico e Blindado)
-        col_autor_nome = next((c for c in df_exibir.columns if "Autor" in c and "Código" not in c), None)
-        if not col_autor_nome:
-            col_autor_nome = next((c for c in df_exibir.columns if "Autor" in c), None)
-
-        if col_autor_nome and col_valor:
-            top10_aut = df_exibir.groupby(col_autor_nome)[col_valor].agg(['sum', 'count']).sort_values(by='sum', ascending=False).head(10).reset_index()
-            
-            fig_aut = px.bar(top10_aut, x=col_autor_nome, y='sum', text='count', 
-                             title="Ranking: Top 10 Autores (Valor Total)",
-                             labels={'sum': 'Total (R$)', 'count': 'Qtd Emendas', col_autor_nome: 'Parlamentar'},
-                             height=550, color='sum', color_continuous_scale='Blues')
-            
-            fig_aut.update_layout(xaxis_tickangle=-45, coloraxis_showscale=False, margin=dict(b=150))
-            fig_aut.update_traces(textposition='outside')
-            st.plotly_chart(fig_aut, use_container_width=True)
-
-        # Tabela de Dados
-        st.success(f"✅ Exibindo dados para: {tipo_visao}")
+        st.success(f"✅ Dados de 2026 carregados com sucesso.")
         st.dataframe(df_exibir, use_container_width=True, hide_index=True)
     else:
-        st.warning(f"Não foram encontrados dados de 2026 para a visualização: {tipo_visao}")
+        st.warning("Nenhum dado encontrado para os critérios selecionados.")
