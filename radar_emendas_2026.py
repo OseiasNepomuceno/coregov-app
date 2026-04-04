@@ -14,7 +14,7 @@ def formatar_moeda(valor):
 def exibir_radar():
     st.title("🏛️ Radar de Emendas 2026 - Dashboard")
     
-    tipo_visao = st.selectbox("Escolha a Visualização:", ["Visão Geral", "Por Favorecido"], key="select_dashboard_v6")
+    tipo_visao = st.selectbox("Escolha a Visualização:", ["Visão Geral", "Por Favorecido"], key="select_dashboard_v7")
 
     file_id = st.secrets.get("id_emendas_geral") if tipo_visao == "Visão Geral" else st.secrets.get("id_emendas_favorecido")
     nome_arquivo = f"base_dados_{file_id}.csv"
@@ -39,24 +39,23 @@ def exibir_radar():
 
         df.columns = [str(c).replace('"', '').strip() for c in df.columns]
         
-        # Filtro de Ano (2026 / 202603)
+        # 1. Filtro de Ano
         col_ano = next((c for c in df.columns if "Ano" in c or "ANO" in c), df.columns[1])
         df[col_ano] = df[col_ano].fillna('').astype(str).str.strip()
         df_2026 = df[df[col_ano].str.startswith("2026")].copy()
 
-        # --- LIMPEZA DE VALORES (BASEADA NA SUA IMAGEM) ---
-        col_valor = "Valor Recebido"
-        if col_valor in df_2026.columns:
-            # 1. Remove o "R$" e espaços
+        # 2. IDENTIFICAÇÃO DINÂMICA DA COLUNA FINANCEIRA (Resolve o KeyError)
+        # Lista de possíveis nomes que o governo usa para o valor final
+        possibilidades = ["Valor Recebido", "Valor Pago", "Valor Liquidado", "Valor Empenhado"]
+        col_valor = next((c for c in possibilidades if c in df_2026.columns), None)
+
+        if col_valor:
+            # Limpeza cirúrgica para o formato "R$ 1.058,00"
             df_2026[col_valor] = df_2026[col_valor].astype(str).str.replace('R$', '', regex=False).str.strip()
-            # 2. Remove os pontos de milhar (ex: 1.058 vira 1058)
-            df_2026[col_valor] = df_2026[col_valor].str.replace('.', '', regex=False)
-            # 3. Troca a vírgula decimal por ponto (ex: 7328,65 vira 7328.65)
-            df_2026[col_valor] = df_2026[col_valor].str.replace(',', '.', regex=False)
-            # 4. Converte para número real (float)
+            df_2026[col_valor] = df_2026[col_valor].str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
             df_2026[col_valor] = pd.to_numeric(df_2026[col_valor], errors='coerce').fillna(0)
         
-        # Remoção de Colunas indesejadas
+        # 3. Remoção de Colunas indesejadas
         if tipo_visao == "Por Favorecido":
             cols_fora = ["Código da Emenda", "Código do Favorecido"]
             df_exibir = df_2026.drop(columns=[c for c in cols_fora if c in df_2026.columns])
@@ -72,9 +71,10 @@ def exibir_radar():
         c1, c2 = st.columns([1, 1.2])
 
         with c1:
-            # CARD SOMATÓRIA (Valor Recebido)
-            total_fin = df_exibir[col_valor].sum() if col_valor in df_exibir.columns else 0
-            st.metric("💰 TOTAL RECEBIDO (2026)", formatar_moeda(total_fin))
+            # CARD SOMATÓRIA (Usa a coluna que foi encontrada)
+            total_fin = df_exibir[col_valor].sum() if col_valor else 0
+            label_valor = col_valor if col_valor else "Valor"
+            st.metric(f"💰 TOTAL {label_valor.upper()}", formatar_moeda(total_fin))
             
             # Gráfico de UF Favorecido
             col_uf = "UF Favorecido"
@@ -95,13 +95,16 @@ def exibir_radar():
 
         st.divider()
 
-        # Top 10 Autores
+        # 4. Top 10 Autores (Ajustado para não dar KeyError)
         col_autor = next((c for c in df_exibir.columns if "Autor" in c), None)
-        if col_autor:
+        if col_autor and col_valor:
             top10 = df_exibir.groupby(col_autor)[col_valor].agg(['sum', 'count']).sort_values(by='sum', ascending=False).head(10).reset_index()
             fig_aut = px.bar(top10, x=col_autor, y='sum', text='count', 
                              title="Top 10 Autores (Valor x Qtd)",
                              labels={'sum': 'Total em R$', 'count': 'Nº Emendas'})
             st.plotly_chart(fig_aut, use_container_width=True)
 
+        st.success(f"✅ {len(df_exibir)} registros processados.")
         st.dataframe(df_exibir, use_container_width=True, hide_index=True)
+    else:
+        st.warning("Nenhum dado de 2026 encontrado com os nomes de colunas atuais.")
