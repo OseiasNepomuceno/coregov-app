@@ -19,7 +19,6 @@ def remover_acentos(texto):
     return "".join(c for c in unicodedata.normalize('NFD', texto) if unicodedata.category(c) != 'Mn').upper().strip()
 
 def formatar_moeda(valor):
-    """Formata o valor para o padrão brasileiro R$"""
     return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 def exibir_radar():
@@ -29,7 +28,7 @@ def exibir_radar():
     with col_filtro:
         tipo_visao = st.selectbox("Visualização:", ["Visão Geral", "Por Favorecido"], key="filtro_visao_topo")
 
-    # IDs do Drive
+    # 1. Definição de IDs e Ficheiros
     if tipo_visao == "Visão Geral":
         file_id = st.secrets.get("id_emendas_geral")
         nome_arquivo = "2026_Emendas_Geral.csv"
@@ -37,87 +36,75 @@ def exibir_radar():
         file_id = st.secrets.get("id_emendas_favorecido")
         nome_arquivo = "2026_Emendas_Favorecido.csv"
 
-    # 1. Download
+    # 2. Download (se necessário)
     if not os.path.exists(nome_arquivo):
         if not file_id:
             st.error(f"ID de arquivo não configurado para {tipo_visao}.")
             return
-        with st.spinner(f"Baixando base de {tipo_visao}..."):
+        with st.spinner(f"Sincronizando base de {tipo_visao}..."):
             url = f'https://drive.google.com/uc?id={file_id}'
             gdown.download(url, nome_arquivo, quiet=False, fuzzy=True)
 
-    # 2. Leitura e Limpeza Inicial
+    # 3. Processamento de Dados
     try:
         df = pd.read_csv(nome_arquivo, sep=None, engine='python', encoding='latin1', on_bad_lines='skip')
         df.columns = [str(c).strip().upper() for c in df.columns]
 
-        # --- SOLUÇÃO DEFINITIVA: FILTRO DE ANO 2026 ---
+        # --- FILTRO DE ANO 2026 ---
         coluna_ano = next((c for c in df.columns if "ANO" in c), None)
         if coluna_ano:
-            # Converte para string, remove o ".0" (comum em números no pandas) e remove espaços
             df[coluna_ano] = df[coluna_ano].astype(str).str.replace('.0', '', regex=False).str.strip()
-            # Filtra onde o texto "2026" estiver presente
-            df = df[df[coluna_ano].str.contains("2026", na=False)]
-            
+            df = df[df[coluna_ano] == "2026"]
+
+        # --- LÓGICA DE ACESSO PREMIUM (NACIONAL) ---
+        usuario = st.session_state.get('usuario_logado', {})
+        plano = str(usuario.get('PLANO', 'BRONZE')).upper()
+        acesso_nacional = plano in ["PREMIUM", "DIAMANTE", "OURO"]
+        
+        coluna_uf = next((c for c in ["UF", "ESTADO", "UF_BENEFICIARIO", "SG_UF"] if c in df.columns), None)
+
+        if not acesso_nacional and coluna_uf:
+            sigla_user = str(usuario.get('LOCALIDADE') or "SP").strip().upper()
+            estado_busca = remover_acentos(MAPA_ESTADOS.get(sigla_user, sigla_user))
+            df['UF_CHECK'] = df[coluna_uf].astype(str).apply(remover_acentos)
+            df = df[df['UF_CHECK'] == estado_busca]
+            st.info(f"📍 Exibindo dados de: **{estado_busca}**")
+        else:
+            st.success("🔓 **Acesso Premium:** Visualizando dados de todo o Brasil")
+
     except Exception as e:
-        st.error(f"Erro ao processar arquivo: {e}")
+        st.error(f"Erro ao processar base de dados: {e}")
         return
 
-    # 3. Lógica de Segurança por Estado (UF)
-    usuario = st.session_state.get('usuario_logado', {})
-    plano = str(usuario.get('PLANO', 'BRONZE')).upper()
-    sigla_usuario = str(usuario.get('LOCALIDADE') or "SP").strip().upper()
-    nome_completo_busca = remover_acentos(MAPA_ESTADOS.get(sigla_usuario, sigla_usuario))
-    acesso_nacional = (plano in ["PREMIUM", "DIAMANTE", "OURO"])
+    # 4. Exibição de Resultados
+    if not df.empty:
+        # Se for Visão Geral, mostra os Cards Financeiros
+        if tipo_visao == "Visão Geral":
+            c_emp = next((c for c in df.columns if "EMPENHADO" in c), None)
+            c_liq = next((c for c in df.columns if "LIQUIDADO" in c), None)
+            c_pag = next((c for c in df.columns if "PAGO" in c), None)
 
-    coluna_uf = next((c for c in ["UF", "ESTADO", "UF_BENEFICIARIO", "UF_FAVORECIDO", "SG_UF", "SIGLA_UF"] if c in df.columns), None)
+            def conv(c):
+                if c:
+                    return pd.to_numeric(df[c].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False), errors='coerce').sum()
+                return 0.0
 
-    if coluna_uf and not acesso_nacional:
-        df['UF_AUX'] = df[coluna_uf].apply(remover_acentos)
-        df = df[df['UF_AUX'] == nome_completo_busca]
-        df = df.drop(columns=['UF_AUX'])
-        st.info(f"📍 Exibindo: **{nome_completo_busca}**")
+            v1, v2, v3 = conv(c_emp), conv(c_liq), conv(c_pag)
 
-    # 4. Cards Financeiros (Somente para Visão Geral)
-    if tipo_visao == "Visão Geral" and not df.empty:
-        col_emp = next((c for c in df.columns if "EMPENHADO" in c), None)
-        col_liq = next((c for c in df.columns if "LIQUIDADO" in c), None)
-        col_pag = next((c for c in df.columns if "PAGO" in c), None)
+            m1, m2, m3 = st.columns(3)
+            m1.metric("EMPENHADO", formatar_moeda(v1))
+            m2.metric("LIQUIDADO", formatar_moeda(v2))
+            m3.metric("PAGO", formatar_moeda(v3))
+            st.divider()
 
-        def limpar_valor(col):
-            if col and col in df.columns:
-                # Limpeza de strings financeiras para conversão numérica
-                return pd.to_numeric(df[col].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False), errors='coerce').sum()
-            return 0.0
-
-        v_empenhado = limpar_valor(col_emp)
-        v_liquidado = limpar_valor(col_liq)
-        v_pago = limpar_valor(col_pag)
-
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            st.markdown('<div style="border-left: 5px solid #007bff; padding-left: 10px;"><b>VALOR EMPENHADO</b></div>', unsafe_allow_html=True)
-            st.metric("", formatar_moeda(v_empenhado))
-        with c2:
-            st.markdown('<div style="border-left: 5px solid #28a745; padding-left: 10px;"><b>VALOR LIQUIDADO</b></div>', unsafe_allow_html=True)
-            st.metric("", formatar_moeda(v_liquidado))
-        with c3:
-            st.markdown('<div style="border-left: 5px solid #ffc107; padding-left: 10px;"><b>VALOR PAGO</b></div>', unsafe_allow_html=True)
-            st.metric("", formatar_moeda(v_pago))
-        st.divider()
-
-    # 5. Exibição da Tabela
-    if df.empty:
-        st.warning("Nenhum dado de 2026 encontrado para os critérios selecionados.")
-    else:
-        total_linhas = len(df)
-        st.write(f"Registros de 2026 encontrados: **{total_linhas}**")
+        st.write(f"📊 Registros encontrados para 2026: **{len(df)}**")
         
-        termo = st.text_input("🔍 Filtrar resultados (Cidade, Deputado, CNPJ):", key="busca_radar")
-        if termo:
-            mask = df.astype(str).apply(lambda x: x.str.contains(termo, case=False)).any(axis=1)
-            df_final = df[mask]
+        # Filtro de Pesquisa na Tabela
+        busca = st.text_input("🔍 Pesquisar na tabela (Cidade, Nome, CNPJ):", key="search_radar")
+        if busca:
+            mask = df.astype(str).apply(lambda x: x.str.contains(busca, case=False)).any(axis=1)
+            st.dataframe(df[mask], use_container_width=True, hide_index=True)
         else:
-            df_final = df
-
-        st.dataframe(df_final, use_container_width=True, hide_index=True)
+            st.dataframe(df, use_container_width=True, hide_index=True)
+    else:
+        st.warning("⚠️ Nenhum dado de 2026 disponível para os critérios atuais.")
