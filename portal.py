@@ -6,8 +6,6 @@ import gspread
 from google.oauth2.service_account import Credentials
 from datetime import datetime
 
-
-
 # --- BLOQUEIO VISUAL TOTAL (MENU, GITHUB E RODAPÉ) ---
 hide_st_style = """
             <style>
@@ -25,18 +23,6 @@ hide_st_style = """
             """
 st.markdown(hide_st_style, unsafe_allow_html=True)
 
-# --- BLOQUEIO VISUAL DO MENU E GITHUB ---
-hide_st_style = """
-            <style>
-            #MainMenu {visibility: hidden;} /* Esconde o menu de 3 linhas */
-            footer {visibility: hidden;}    /* Esconde o "Made with Streamlit" */
-            header {visibility: hidden;}    /* Esconde a barra superior com o ícone do GitHub */
-            [data-testid="stToolbar"] {visibility: hidden;} /* Esconde ferramentas extras */
-            [data-testid="stHeader"] {display: none;} /* Remove o espaço do cabeçalho */
-            </style>
-            """
-st.markdown(hide_st_style, unsafe_allow_html=True)
-
 # --- 1. IMPORTAÇÃO DOS MÓDULOS ---
 import radar_emendas_2026
 import recursos2026
@@ -48,11 +34,9 @@ def obter_creds():
     """Gerencia a autenticação usando Secrets (Nuvem) ou Arquivo JSON (Local)"""
     scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
     
-    # 1. Tenta buscar nos Secrets do Streamlit (Para o domínio coregov.com.br)
     if "gcp_service_account" in st.secrets:
         return Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
     
-    # 2. Se não achar nos secrets, tenta o arquivo local (Para testes no seu PC)
     nome_da_chave = 'ponto-facial-oseiascarveng-cd7b1ab54295.json'
     if os.path.exists(nome_da_chave):
         return Credentials.from_service_account_file(nome_da_chave, scopes=scope)
@@ -103,14 +87,25 @@ def autenticar_usuario(usuario_digitado, senha_digitada):
         if not user_row.empty:
             dados = user_row.iloc[0]
             if str(dados.get('STATUS', 'pendente')).lower().strip() == 'ativo':
+                # --- CORREÇÃO AQUI: CAPTURA DINÂMICA DE PLANO E UF ---
+                plano_capturado = str(dados.get('PLANO', 'BÁSICO')).upper()
+                # Localidade (Coluna E / índice 4)
+                uf_escolhida = str(dados.iloc[4]).strip() if len(dados) >= 5 else "Brasil"
+
+                # Salvando variáveis padronizadas para o Radar de Emendas
                 st.session_state['logado'] = True
                 st.session_state['usuario_nome'] = u_clean
-                st.session_state['usuario_plano'] = str(dados.get('PLANO', 'BÁSICO')).upper()
+                st.session_state['plano'] = plano_capturado
+                st.session_state['uf_liberada'] = uf_escolhida 
+                
+                # Mantendo compatibilidade com o restante do seu portal
+                st.session_state['usuario_plano'] = plano_capturado
                 st.session_state['usuario_logado'] = {
-                    'LOCALIDADE': dados.iloc[4] if len(dados) >= 5 else "BR",
+                    'LOCALIDADE': uf_escolhida,
                     'REVISOES_USADAS': dados.iloc[5] if len(dados) >= 6 else 0
                 }
-                registrar_log_acesso(u_clean, st.session_state['usuario_plano'])
+                
+                registrar_log_acesso(u_clean, plano_capturado)
                 return True
         return False
     except: return False
