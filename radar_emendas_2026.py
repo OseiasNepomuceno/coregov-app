@@ -17,45 +17,55 @@ def exibir_radar():
     tipo_visao = st.selectbox("Visualização:", ["Visão Geral", "Por Favorecido"], key="v_final_2026")
 
     file_id = st.secrets.get("id_emendas_geral") if tipo_visao == "Visão Geral" else st.secrets.get("id_emendas_favorecido")
-    nome_arquivo = "base_temp.csv"
+    
+    # 1. NOME DE ARQUIVO DINÂMICO PARA EVITAR CACHE DO SERVIDOR
+    # Usamos o ID no nome para que, se o ID mudar, o arquivo antigo seja ignorado
+    nome_arquivo = f"base_radar_{file_id}.csv" if file_id else "base_temp.csv"
 
-    # Botão para forçar o download se algo estiver errado
+    # 2. LÓGICA DE LIMPEZA FORÇADA (BOTÃO)
     if st.button("🔄 Sincronizar Base de Dados"):
-        if os.path.exists(nome_arquivo):
-            os.remove(nome_arquivo)
+        # Remove todos os arquivos CSV da pasta temporária do servidor
+        for f in os.listdir():
+            if f.endswith(".csv"):
+                try:
+                    os.remove(f)
+                except:
+                    pass
+        st.success("Cache limpo! Baixando versão mais recente do Drive...")
         st.rerun()
 
+    # 3. DOWNLOAD COM BYPASS DE CACHE
     if not os.path.exists(nome_arquivo):
         if not file_id:
             st.error("Configure o ID do arquivo no Streamlit Secrets."); return
-        with st.spinner("Baixando dados..."):
-            gdown.download(f'https://drive.google.com/uc?id={file_id}', nome_arquivo, quiet=False)
+        
+        with st.spinner("Conectando ao Google Drive..."):
+            # A URL com 'export=download' ajuda a forçar a versão mais atual
+            url = f'https://drive.google.com/uc?export=download&id={file_id}'
+            gdown.download(url, nome_arquivo, quiet=False)
 
     try:
-        # TENTATIVA 1: Ponto e vírgula (Padrão BR)
+        # Leitura Robusta (Tenta ponto e vírgula, depois vírgula)
         df = pd.read_csv(nome_arquivo, sep=';', encoding='latin1', on_bad_lines='skip', dtype=str)
-        
-        # Se ele leu tudo como uma coluna só, tenta vírgula
         if len(df.columns) < 2:
             df = pd.read_csv(nome_arquivo, sep=',', encoding='latin1', on_bad_lines='skip', dtype=str)
 
         # Limpeza de nomes de colunas
         df.columns = [str(c).strip() for c in df.columns]
 
-        # --- LOCALIZAÇÃO AUTOMÁTICA DA COLUNA DE ANO ---
-        # Procura por "Ano", se não achar, pega a segunda coluna
+        # Localização automática da coluna de Ano
         col_ano = next((c for c in df.columns if "Ano" in c or "ANO" in c), df.columns[1])
 
-        # Limpeza do Ano (Remove .0, espaços e extrai apenas números)
+        # Extração apenas de números (corrige 2026.0 ou formatos científicos)
         df[col_ano] = df[col_ano].astype(str).str.extract('(\d+)', expand=False)
         
-        # FILTRO
+        # Filtro de 2026
         df_filtrado = df[df[col_ano] == "2026"].copy()
             
     except Exception as e:
         st.error(f"Erro ao processar: {e}"); return
 
-    # Verificação de Plano
+    # Verificação de Plano / Acesso
     usuario = st.session_state.get('usuario_logado', {})
     plano = str(usuario.get('PLANO', 'BRONZE')).upper()
     
@@ -68,11 +78,13 @@ def exibir_radar():
             df_filtrado = df_filtrado[df_filtrado[col_uf].astype(str).str.contains(sigla, na=False, case=False)]
             st.info(f"📍 Localidade: {sigla}")
 
+    # Exibição dos Resultados
     if not df_filtrado.empty:
         if tipo_visao == "Visão Geral":
             def soma_valor(texto):
                 col = next((c for c in df_filtrado.columns if texto.upper() in c.upper()), None)
                 if col:
+                    # Limpeza de formato de moeda brasileiro para cálculo
                     v = df_filtrado[col].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
                     return pd.to_numeric(v, errors='coerce').sum()
                 return 0.0
@@ -87,6 +99,7 @@ def exibir_radar():
         st.write(f"📊 Foram encontrados **{len(df_filtrado)}** registros para 2026.")
         st.dataframe(df_filtrado, use_container_width=True, hide_index=True)
     else:
-        st.warning("⚠️ Nenhum registro de 2026 encontrado.")
-        # Se não achar nada, mostra o que existe no arquivo para diagnóstico
-        st.write("Anos disponíveis no arquivo:", df[col_ano].unique()[:5] if col_ano in df.columns else "Coluna não encontrada")
+        st.warning("⚠️ Nenhum registro de 2026 encontrado nesta versão do arquivo.")
+        # Diagnóstico para o desenvolvedor
+        if col_ano in df.columns:
+            st.write("Anos identificados no arquivo baixado:", df[col_ano].unique())
