@@ -6,6 +6,20 @@ import gspread
 from google.oauth2.service_account import Credentials
 from datetime import datetime
 
+import streamlit as st
+
+# --- BLOQUEIO VISUAL DO MENU E GITHUB ---
+hide_st_style = """
+            <style>
+            #MainMenu {visibility: hidden;} /* Esconde o menu de 3 linhas */
+            footer {visibility: hidden;}    /* Esconde o "Made with Streamlit" */
+            header {visibility: hidden;}    /* Esconde a barra superior com o ícone do GitHub */
+            [data-testid="stToolbar"] {visibility: hidden;} /* Esconde ferramentas extras */
+            [data-testid="stHeader"] {display: none;} /* Remove o espaço do cabeçalho */
+            </style>
+            """
+st.markdown(hide_st_style, unsafe_allow_html=True)
+
 # --- 1. IMPORTAÇÃO DOS MÓDULOS ---
 import radar_emendas_2026
 import recursos2026
