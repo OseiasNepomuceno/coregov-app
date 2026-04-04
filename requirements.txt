@@ -1,0 +1,13 @@
+streamlit
+altair
+gdown
+pandas
+requests
+openpyxl
+reportlab
+google-generativeai
+PyPDF2
+python-docx
+gspread
+google-auth
+google-auth-oauthlib
