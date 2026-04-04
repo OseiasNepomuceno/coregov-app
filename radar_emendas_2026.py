@@ -12,8 +12,8 @@ def formatar_moeda(valor):
 
 def exibir_radar():
     # --- REGRA DE NEGÓCIO: ID_LICENÇAS ---
-    plano_usuario = st.session_state.get("plano", "Básico")  # Básico ou Premium
-    uf_liberada = st.session_state.get("uf_liberada", "RJ")  # Sigla do Estado ou "Brasil"
+    plano_usuario = st.session_state.get("plano", "Básico")  
+    uf_liberada = st.session_state.get("uf_liberada", "RJ")  
 
     # Estilização dos Cards
     st.markdown("""
@@ -37,7 +37,7 @@ def exibir_radar():
     nome_arquivo = f"base_dados_{file_id}.csv"
 
     if not os.path.exists(nome_arquivo):
-        with st.spinner("Sincronizando dados da licença..."):
+        with st.spinner("Sincronizando dados..."):
             url = f'https://drive.google.com/uc?export=download&id={file_id}'
             gdown.download(url, nome_arquivo, quiet=False)
 
@@ -82,7 +82,7 @@ def exibir_radar():
             df_exibir = df_2026.drop(columns=[c for c in cols_fora if c in df_2026.columns]).copy()
 
     except Exception as e:
-        st.error(f"Erro ao validar licença: {e}"); return
+        st.error(f"Erro no processamento: {e}"); return
 
     if not df_exibir.empty:
         st.info(status_msg)
@@ -94,7 +94,6 @@ def exibir_radar():
             with c2: st.metric("💸 Total Liquidado", formatar_moeda(df_exibir["Valor Liquidado"].sum() if "Valor Liquidado" in df_exibir.columns else 0))
             with c3: st.metric("✅ Total Pago", formatar_moeda(df_exibir["Valor Pago"].sum() if "Valor Pago" in df_exibir.columns else 0))
             
-            # Gráfico de Região (Só para visão Nacional/Brasil)
             if uf_liberada == "Brasil" and "Região" in df_exibir.columns:
                 st.divider()
                 df_reg = df_exibir[~df_exibir["Região"].isin(["Nacional", "Múltiplo", "Exterior"])]
@@ -106,46 +105,37 @@ def exibir_radar():
             cl, cr = st.columns(2)
             
             with cl:
-                # 1. Troca de Código por Nome do Autor
+                # 1. TROCA DE CÓDIGO POR NOME DO AUTOR
+                # Buscamos a coluna que contém o NOME e ignoramos a que contém o CÓDIGO
                 c_aut = next((c for c in df_exibir.columns if "Autor" in c and "Código" not in c), None)
+                
                 if c_aut:
                     df_aut = df_exibir.groupby(c_aut)["Valor Pago"].sum().sort_values(ascending=False).head(10).reset_index()
-                    fig1 = px.bar(
-                        df_aut, 
-                        x=c_aut, 
-                        y="Valor Pago", 
-                        title="Top 10 Autores (Valor Recebido)", 
-                        color="Valor Pago", 
-                        color_continuous_scale="Blues"
-                    )
-                    fig1.update_layout(xaxis_tickangle=-45, coloraxis_showscale=False, xaxis_title="Autor")
+                    fig1 = px.bar(df_aut, x=c_aut, y="Valor Pago", title="Top 10 Autores (Valor Pago)", color="Valor Pago", color_continuous_scale="Blues")
+                    fig1.update_layout(xaxis_tickangle=-45, coloraxis_showscale=False, xaxis_title="Nome do Autor")
                     st.plotly_chart(fig1, use_container_width=True)
                 else:
-                    st.warning("Coluna 'Autor da Emenda' não identificada.")
+                    st.warning("Coluna 'Autor da Emenda' (Nome) não encontrada.")
 
             with cr:
-                # 2. Natureza Jurídica com agrupamento em "Outros"
+                # 2. NATUREZA JURÍDICA COM AGRUPAMENTO "OUTROS"
                 c_nat = next((c for c in df_exibir.columns if "Natureza Jurídica" in c), None)
                 if c_nat:
                     df_nat_raw = df_exibir.groupby(c_nat)["Valor Pago"].sum().sort_values(ascending=False).reset_index()
                     
                     if len(df_nat_raw) > 10:
                         top_10 = df_nat_raw.head(10).copy()
-                        outros_soma = df_nat_raw.iloc[10:]["Valor Pago"].sum()
-                        df_outros = pd.DataFrame({c_nat: ["Outros"], "Valor Pago": [outros_soma]})
+                        outros_val = df_nat_raw.iloc[10:]["Valor Pago"].sum()
+                        df_outros = pd.DataFrame({c_nat: ["Outros"], "Valor Pago": [outros_val]})
                         df_final_nat = pd.concat([top_10, df_outros], ignore_index=True)
                     else:
                         df_final_nat = df_nat_raw
 
-                    fig2 = px.pie(
-                        df_final_nat, 
-                        names=c_nat, 
-                        values="Valor Pago", 
-                        title="Natureza Jurídica (%) - Top 10 + Outros", 
-                        hole=0.4
-                    )
+                    fig2 = px.pie(df_final_nat, names=c_nat, values="Valor Pago", title="Natureza Jurídica (Top 10 + Outros)", hole=0.4)
                     fig2.update_layout(legend=dict(orientation="h", y=-0.2))
                     st.plotly_chart(fig2, use_container_width=True)
+                else:
+                    st.warning("Coluna 'Natureza Jurídica' não encontrada.")
 
         st.divider()
         st.dataframe(df_exibir, use_container_width=True, hide_index=True)
