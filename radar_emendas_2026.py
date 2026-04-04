@@ -27,7 +27,7 @@ def exibir_radar():
 
     st.title("🏛️ Radar de Emendas 2026 - Dashboard")
     
-    tipo_visao = st.selectbox("Escolha a Visualização:", ["Visão Geral", "Por Favorecido"], key="select_dashboard_v22")
+    tipo_visao = st.selectbox("Escolha a Visualização:", ["Visão Geral", "Por Favorecido"], key="select_dashboard_v23")
 
     file_id = st.secrets.get("id_emendas_geral") if tipo_visao == "Visão Geral" else st.secrets.get("id_emendas_favorecido")
     nome_arquivo = f"base_dados_{file_id}.csv"
@@ -84,7 +84,6 @@ def exibir_radar():
     if not df_exibir.empty:
         st.markdown(f"## 📊 {tipo_visao} 2026")
         
-        # --- CARDS ---
         if tipo_visao == "Visão Geral":
             c1, c2, c3 = st.columns(3)
             with c1: st.metric("💰 Total Empenhado", formatar_moeda(df_exibir["Valor Empenhado"].sum() if "Valor Empenhado" in df_exibir.columns else 0))
@@ -92,11 +91,16 @@ def exibir_radar():
             with c3: st.metric("✅ Total Pago", formatar_moeda(df_exibir["Valor Pago"].sum() if "Valor Pago" in df_exibir.columns else 0))
             st.divider()
 
-            # --- NOVO GRÁFICO: TOTAL POR REGIÃO (Visão Geral) ---
+            # --- GRÁFICO: TOTAL POR REGIÃO (FILTRADO) ---
             if "Região" in df_exibir.columns and "Valor Empenhado" in df_exibir.columns:
-                df_regiao = df_exibir.groupby("Região")["Valor Empenhado"].sum().sort_values(ascending=False).reset_index()
+                # Filtragem para remover as categorias indesejadas
+                termos_remover = ["Nacional", "Múltiplo", "Exterior"]
+                df_regiao_filtered = df_exibir[~df_exibir["Região"].isin(termos_remover)].copy()
+                
+                df_regiao = df_regiao_filtered.groupby("Região")["Valor Empenhado"].sum().sort_values(ascending=False).reset_index()
+                
                 fig_reg = px.bar(df_regiao, x="Região", y="Valor Empenhado", 
-                                 title="Distribuição de Recursos por Região (Empenhado)",
+                                 title="Distribuição de Recursos por Região (Geográfico)",
                                  labels={"Valor Empenhado": "Total (R$)"},
                                  color="Valor Empenhado", color_continuous_scale="Viridis", height=400)
                 fig_reg.update_layout(coloraxis_showscale=False)
@@ -104,6 +108,7 @@ def exibir_radar():
                 st.divider()
 
         else:
+            # Lógica do Favorecido permanece igual
             v_pago = df_exibir["Valor Pago"].sum() if "Valor Pago" in df_exibir.columns else 0
             st.metric("💰 TOTAL PAGO ACUMULADO", formatar_moeda(v_pago))
             st.divider()
