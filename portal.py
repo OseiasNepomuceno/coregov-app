@@ -6,7 +6,24 @@ import gspread
 from google.oauth2.service_account import Credentials
 from datetime import datetime
 
-import streamlit as st
+
+
+# --- BLOQUEIO VISUAL TOTAL (MENU, GITHUB E RODAPÉ) ---
+hide_st_style = """
+            <style>
+            #MainMenu {visibility: hidden;} 
+            footer {visibility: hidden;}    
+            header {visibility: hidden;}    
+            [data-testid="stToolbar"] {visibility: hidden;}
+            [data-testid="stHeader"] {display: none;}
+            
+            /* Esta linha abaixo remove o botão 'Made with Streamlit' e o menu de perfil */
+            .viewerBadge_container__1QS1n {display: none !important;}
+            .stAppDeployButton {display: none !important;}
+            iframe[title="Managed Navigation"] {display: none !important;}
+            </style>
+            """
+st.markdown(hide_st_style, unsafe_allow_html=True)
 
 # --- BLOQUEIO VISUAL DO MENU E GITHUB ---
 hide_st_style = """
