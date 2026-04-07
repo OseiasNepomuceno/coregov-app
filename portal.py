@@ -14,13 +14,43 @@ if 'usuario_plano' not in st.session_state:
 # --- 2. CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(page_title="CoreGov", page_icon="🛰️", layout="wide")
 
-# --- 3. FUNÇÕES DE INTERFACE ---
+# --- 3. FUNÇÕES DE SUPORTE E AUTENTICAÇÃO ---
+
+def autenticar_usuario(usuario_digitado, senha_digitada):
+    """Valida o login consultando o arquivo Excel no Google Drive"""
+    file_id = st.secrets.get("file_id_licencas") 
+    nome_arquivo = "licencas_login.xlsx"
+    url = f'https://drive.google.com/uc?id={file_id}'
+    try:
+        if os.path.exists(nome_arquivo): os.remove(nome_arquivo)
+        gdown.download(url, nome_arquivo, quiet=True)
+        df = pd.read_excel(nome_arquivo, sheet_name='usuario')
+        df.columns = [str(c).strip().upper() for c in df.columns]
+        
+        u_clean = str(usuario_digitado).strip().lower()
+        p_clean = str(senha_digitada).strip()
+
+        user_row = df[(df['USUARIO'].astype(str).str.strip().str.lower() == u_clean) & 
+                      (df['SENHA'].astype(str).str.strip() == p_clean)]
+        
+        if not user_row.empty:
+            dados = user_row.iloc[0]
+            if str(dados.get('STATUS', 'pendente')).lower().strip() == 'ativo':
+                st.session_state['logado'] = True
+                st.session_state['usuario_nome'] = u_clean
+                st.session_state['usuario_plano'] = str(dados.get('PLANO', 'BÁSICO')).upper()
+                return True
+        return False
+    except Exception as e:
+        st.error(f"Erro na conexão com o banco de dados: {e}")
+        return False
+
+# --- 4. FUNÇÕES DE INTERFACE ---
 
 def exibir_planos():
     st.markdown("<h2 style='text-align: center; color: #1E3A8A;'>Licenças de Uso Profissional</h2>", unsafe_allow_html=True)
     st.write("")
     
-    # Uso de colunas nativas para estabilidade total
     col_p1, col_p2 = st.columns(2)
     
     with col_p1:
@@ -58,7 +88,6 @@ def exibir_home():
     st.markdown("<h1 style='text-align: center; color: #1E3A8A;'>Portal CoreGov</h1>", unsafe_allow_html=True)
     st.write("---")
     
-    # CSS dos Cards da Vitrine
     st.markdown("""
         <style>
         .card-v { padding: 25px; border-radius: 15px; box-shadow: 5px 5px 15px rgba(0,0,0,0.05); height: 280px; text-align: center; transition: 0.3s; }
@@ -86,7 +115,7 @@ def exibir_home():
             st.session_state['secao'] = 'cliente'
             st.rerun()
 
-# --- 4. LÓGICA DE RENDERIZAÇÃO PRINCIPAL ---
+# --- 5. LÓGICA DE RENDERIZAÇÃO PRINCIPAL ---
 
 def main():
     if not st.session_state['logado']:
@@ -97,25 +126,38 @@ def main():
             exibir_planos()
             
         elif st.session_state['secao'] == 'login':
-            st.markdown("### 🔑 Login de Consultor")
-            # Adicione aqui seu formulário de login real
-            if st.button("Voltar"): 
-                st.session_state['secao'] = 'home'
-                st.rerun()
+            st.markdown("<h2 style='text-align: center; color: #1E3A8A;'>🔐 Acesso do Consultor</h2>", unsafe_allow_html=True)
+            col1, col2, col3 = st.columns([1, 1, 1])
+            with col2:
+                with st.form("login_form"):
+                    u = st.text_input("Usuário")
+                    p = st.text_input("Senha", type="password")
+                    if st.form_submit_button("Entrar", use_container_width=True):
+                        if autenticar_usuario(u, p):
+                            st.rerun()
+                        else:
+                            st.error("Credenciais inválidas ou licença inativa.")
+                if st.button("Voltar", use_container_width=True): 
+                    st.session_state['secao'] = 'home'
+                    st.rerun()
                 
         elif st.session_state['secao'] == 'cliente':
-            st.markdown("### 🏛️ Portal do Ente")
-            # Adicione aqui sua lógica de acesso via CNPJ
-            if st.button("Voltar"): 
-                st.session_state['secao'] = 'home'
-                st.rerun()
+            st.markdown("<h2 style='text-align: center;'>🏛️ Portal do Ente</h2>", unsafe_allow_html=True)
+            col1, col2, col3 = st.columns([1, 1, 1])
+            with col2:
+                st.text_input("Digite o CNPJ da Instituição")
+                st.button("Consultar", use_container_width=True)
+                if st.button("Voltar", use_container_width=True): 
+                    st.session_state['secao'] = 'home'
+                    st.rerun()
     
     else:
-        st.sidebar.title("Painel CoreGov")
+        st.sidebar.title("CoreGov")
+        st.sidebar.write(f"Plano: **{st.session_state['usuario_plano']}**")
         if st.sidebar.button("Sair"):
             st.session_state.clear()
             st.rerun()
-        st.write(f"Bem-vindo! Plano Atual: {st.session_state['usuario_plano']}")
+        st.write(f"### Bem-vindo ao Painel Administrativo, {st.session_state.get('usuario_nome', 'Consultor')}!")
 
 if __name__ == "__main__":
     main()
