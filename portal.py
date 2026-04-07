@@ -10,8 +10,8 @@ import requests
 # --- 1. CONFIGURAÇÕES DE LINKS ---
 URL_CLIENTES_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT4dCgWCWMhrPNgrSMkXDd2s2FA9eP_gSu9pL8c1MfuJk3YvcQw0kVMq6i8p_FA2Zz7IhAYEexg3CoI/pub?gid=1923834729&single=true&output=csv"
 WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbzH2C-ski7ARq9XC6YweSMKf1VpSuxGvJHjAKSyL85ILsjLxGg6hDTxUHxLk40iEW7HTg/exec"
-LINK_MERCADO_PAGO_BASICO = "https://www.mercadopago.com.br" # Substitua pelo seu link real
-LINK_MERCADO_PAGO_PREMIUM = "https://www.mercadopago.com.br" # Substitua pelo seu link real
+LINK_MERCADO_PAGO_BASICO = "https://www.mercadopago.com.br" 
+LINK_MERCADO_PAGO_PREMIUM = "https://www.mercadopago.com.br" 
 
 # --- 2. IMPORTAÇÃO DOS MÓDULOS ---
 import radar_emendas_2026
@@ -79,6 +79,7 @@ def gerenciar_clientes():
     with t2:
         with st.form("add_client", clear_on_submit=True):
             st.subheader("Cadastrar Novo Cliente")
+            st.warning("⚠️ A ativação de cada cliente gerará uma taxa adicional de R$ 450,00.")
             c_cnpj = st.text_input("CNPJ")
             c_nome = st.text_input("Nome do Cliente / Ente")
             c_tel = st.text_input("Telefone")
@@ -119,7 +120,7 @@ def executar():
         
         st.write("---")
 
-        # --- CARDS DA VITRINE (Só aparecem se nenhuma seção estiver ativa) ---
+        # --- HOME / VITRINE ---
         if st.session_state['secao'] == 'home':
             st.markdown("""
                 <style>
@@ -160,22 +161,23 @@ def executar():
                     st.session_state['secao'] = 'home'
                     st.rerun()
 
-        # --- SEÇÃO DE PLANOS (RECUPERADA) ---
+        # --- SEÇÃO DE PLANOS ATUALIZADA ---
         elif st.session_state['secao'] == 'planos':
-            st.markdown("<h2 style='text-align: center;'>Escolha seu Plano de Acesso</h2>", unsafe_allow_html=True)
+            st.markdown("<h2 style='text-align: center; color: #1E3A8A;'>Licenças de Uso Profissional</h2>", unsafe_allow_html=True)
             p1, p2 = st.columns(2)
             
             with p1:
                 st.markdown("""
-                    <div style="background-color: #ffffff; padding: 30px; border-radius: 15px; border: 2px solid #e0e0e0; text-align: center;">
+                    <div style="background-color: #ffffff; padding: 30px; border-radius: 15px; border: 2px solid #e0e0e0; text-align: center; min-height: 550px;">
                         <h2 style="color: #4A5568;">Plano Básico</h2>
-                        <h1 style="color: #2D3748;">R$ 197<small>/mês</small></h1>
+                        <h1 style="color: #2D3748;">R$ 1.250,00<small style="font-size: 14px;">/mês</small></h1>
+                        <p style="color: #718096;"><b>+ R$ 450,00 por cliente atendido</b></p>
                         <hr>
                         <ul style="text-align: left; list-style-type: none; padding: 0;">
                             <li>✅ Radar de Emendas 2026</li>
                             <li>✅ Consulta de Recursos</li>
-                            <li>✅ Gestão de até 10 Clientes</li>
-                            <li>❌ Revisor de Estatuto IA</li>
+                            <li>✅ Gestão de Clientes Atendidos</li>
+                            <li>✅ Revisor de Estatuto (Até 10 revisões)</li>
                         </ul>
                     </div>
                 """, unsafe_allow_html=True)
@@ -183,15 +185,16 @@ def executar():
 
             with p2:
                 st.markdown("""
-                    <div style="background-color: #f7fafc; padding: 30px; border-radius: 15px; border: 2px solid #4299e1; text-align: center;">
+                    <div style="background-color: #f7fafc; padding: 30px; border-radius: 15px; border: 2px solid #4299e1; text-align: center; min-height: 550px;">
                         <h2 style="color: #2B6CB0;">Plano Premium</h2>
-                        <h1 style="color: #2C5282;">R$ 397<small>/mês</small></h1>
+                        <h1 style="color: #2C5282;">R$ 2.300,00<small style="font-size: 14px;">/mês</small></h1>
+                        <p style="color: #718096;"><b>+ R$ 450,00 por cliente atendido</b></p>
                         <hr>
                         <ul style="text-align: left; list-style-type: none; padding: 0;">
-                            <li>✅ Todos os Recursos do Básico</li>
-                            <li>✅ Revisor de Estatuto IA Ilimitado</li>
-                            <li>✅ Gestão de Clientes Ilimitada</li>
-                            <li>✅ Suporte Prioritário</li>
+                            <li>✅ Todos os Recursos do Plano Básico</li>
+                            <li>✅ Revisor de Estatuto (Até 15 revisões)</li>
+                            <li>✅ Carteira Expandida (Até 15 clientes)</li>
+                            <li>✅ Inteligência de Dados Prioritária</li>
                         </ul>
                     </div>
                 """, unsafe_allow_html=True)
@@ -203,7 +206,7 @@ def executar():
                 st.rerun()
 
     else:
-        # --- ÁREA LOGADA (SIDEBAR) ---
+        # --- ÁREA LOGADA ---
         with st.sidebar:
             if os.path.exists("logocoregov.png"): st.image("logocoregov.png", use_container_width=True)
             st.title("CoreGov")
@@ -218,10 +221,9 @@ def executar():
                 st.session_state.clear()
                 st.rerun()
 
-        # --- LÓGICA DE EXIBIÇÃO DE TELAS ---
         if escolha == "🏠 Home":
             st.markdown(f"### 👋 Bem-vindo, {user.capitalize()}!")
-            st.info("Utilize o menu lateral para gerenciar sua carteira e radar.")
+            st.info("Utilize o menu lateral para gerenciar sua operação.")
         elif escolha == "💼 Clientes Atendidos": gerenciar_clientes()
         elif escolha == "🏛️ Radar de Emendas": radar_emendas_2026.exibir_radar()
         elif escolha == "📊 Recursos 2026": recursos2026.exibir_recursos()
