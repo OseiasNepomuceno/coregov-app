@@ -7,7 +7,7 @@ import os
 LINK_MERCADO_PAGO_BASICO = "https://www.mercadopago.com.br" 
 LINK_MERCADO_PAGO_PREMIUM = "https://www.mercadopago.com.br" 
 
-# --- 2. SEÇÃO DE PLANOS (ATUALIZADA COM AS NOVAS REGRAS) ---
+# --- 2. SEÇÃO DE PLANOS (TEXTO ATUALIZADO) ---
 
 def exibir_planos():
     st.markdown("<h2 style='text-align: center; color: #1E3A8A;'>Licenças de Uso Profissional</h2>", unsafe_allow_html=True)
@@ -42,7 +42,7 @@ def exibir_planos():
                 <ul style="text-align: left; list-style-type: none; padding: 0; font-size: 15px; line-height: 2.2;">
                     <li>✅ <b>Tudo do Plano Básico</b></li>
                     <li>✅ <b>Gestão de Clientes Atendidos</b></li>
-                    <li>✅ <b>Relatórios de Captação (Modelo ACESV)</b></li>
+                    <li>✅ <b>Relatórios de Captação</b></li>
                     <li>✅ <b>Portal do Cliente (Acesso via CNPJ)</b></li>
                     <li>✅ <b>Revisor de Estatuto IA:</b> 15 revisões</li>
                     <li>⚠️ <b>Taxa Operacional:</b> R$ 450,00/cliente</li>
@@ -55,49 +55,20 @@ def exibir_planos():
         st.session_state['secao'] = 'home'
         st.rerun()
 
-# --- 3. GESTÃO DE ACESSO (TRAVA DE PLANO) ---
+# --- 3. MÓDULO GESTÃO DE CLIENTES (LÓGICA PREMIUM) ---
 
 def gerenciar_clientes():
-    # Recupera o plano do usuário logado
     plano_usuario = st.session_state.get('usuario_plano', 'BÁSICO')
     
     if plano_usuario == 'BÁSICO':
-        st.warning("⚠️ **Módulo Restrito.** O Plano Básico não inclui a Gestão de Clientes e Relatórios.")
-        st.info("Faça o upgrade para o **Plano Premium** para gerenciar sua carteira e liberar o acesso dos seus clientes via CNPJ.")
-        if st.button("Ver Benefícios do Plano Premium"):
-            st.session_state['secao'] = 'planos'
-            st.rerun()
+        st.warning("⚠️ **Módulo Restrito.** O Plano Básico não inclui a Gestão de Clientes.")
+        st.info("Faça o upgrade para o **Plano Premium** para gerenciar sua carteira e liberar relatórios.")
     else:
-        st.header("💼 Gestão de Clientes e Relatórios (Premium)")
-        t1, t2, t3 = st.tabs(["👥 Minha Carteira", "➕ Novo Cadastro", "📊 Relatório ACESV"])
+        st.header("💼 Gestão de Clientes e Relatórios")
+        t1, t2, t3 = st.tabs(["👥 Minha Carteira", "➕ Novo Cadastro", "📊 Relatório de Captação"])
         with t3:
-            # Função do relatório que criamos anteriormente
-            st.write("Interface de elaboração de relatório liberada.")
+            # Aqui chamamos a função que exibe a interface de preenchimento do relatório
+            st.info("Preencha os dados abaixo para atualizar o relatório visualizado pelo seu cliente.")
+            # ... (Função exibir_relatorio_acesv que definimos antes) ...
 
-# --- 4. EXECUÇÃO PRINCIPAL ---
-
-def executar():
-    if 'logado' not in st.session_state: st.session_state['logado'] = False
-    if 'secao' not in st.session_state: st.session_state['secao'] = 'home'
-
-    if not st.session_state['logado'] and st.session_state['secao'] != 'cliente':
-        # ... (Código da Vitrine permanece o mesmo) ...
-        if st.session_state['secao'] == 'home':
-            # Vitrine com os 4 cards
-            pass 
-        elif st.session_state['secao'] == 'planos':
-            exibir_planos()
-        # ... (Login e etc) ...
-    
-    elif st.session_state['logado']:
-        with st.sidebar:
-            st.title("CoreGov")
-            opcao = st.radio("Navegação:", ["🏠 Home", "📊 Recursos 2026", "🏛️ Radar de Emendas", "📜 Revisor de Estatuto", "💼 Gestão de Clientes"])
-            if st.button("Sair"): st.session_state.clear(); st.rerun()
-
-        if opcao == "💼 Gestão de Clientes":
-            gerenciar_clientes()
-        # ... (Outros módulos) ...
-
-if __name__ == "__main__":
-    executar()
+# ... (Restante do código de navegação e login permanece igual) ...
