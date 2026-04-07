@@ -14,13 +14,51 @@ if 'usuario_plano' not in st.session_state:
 # --- 2. CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(page_title="CoreGov", page_icon="🛰️", layout="wide")
 
-# --- 3. FUNÇÕES DE NAVEGAÇÃO ---
+# --- 3. FUNÇÕES DE INTERFACE ---
+
+def exibir_planos():
+    st.markdown("<h2 style='text-align: center; color: #1E3A8A;'>Licenças de Uso Profissional</h2>", unsafe_allow_html=True)
+    st.write("")
+    
+    # Uso de colunas nativas para estabilidade total
+    col_p1, col_p2 = st.columns(2)
+    
+    with col_p1:
+        with st.container(border=True):
+            st.markdown("### 📄 Plano Básico")
+            st.markdown("## R$ 1.250,00 <small style='font-size:15px'>/mês</small>", unsafe_allow_html=True)
+            st.write("---")
+            st.write("✅ **Radar de Emendas 2026**")
+            st.write("✅ **Consulta de Recursos**")
+            st.write("✅ **Revisor de Estatuto IA (10 rev)**")
+            st.write("❌ ~~Gestão de Clientes e Relatórios~~")
+            st.write("❌ ~~Acesso ao Portal do Ente (CNPJ)~~")
+            st.write("")
+            st.link_button("Assinar Plano Básico", "https://www.mercadopago.com.br", use_container_width=True)
+
+    with col_p2:
+        with st.container(border=True):
+            st.markdown("### 🚀 Plano Premium 🔥")
+            st.markdown("## R$ 2.300,00 <small style='font-size:15px'>/mês</small>", unsafe_allow_html=True)
+            st.write("---")
+            st.write("✅ **Tudo do Plano Básico**")
+            st.write("✅ **Gestão de Clientes Atendidos**")
+            st.write("✅ **Relatórios de Captação**")
+            st.write("✅ **Portal do Cliente (Acesso CNPJ)**")
+            st.write("✅ **Revisor de Estatuto IA (15 rev)**")
+            st.write("⚠️ **Taxa Operacional: R$ 450/cliente**")
+            st.link_button("Assinar Plano Premium", "https://www.mercadopago.com.br", use_container_width=True)
+
+    st.write("")
+    if st.button("⬅️ Voltar para a Vitrine", use_container_width=True):
+        st.session_state['secao'] = 'home'
+        st.rerun()
 
 def exibir_home():
     st.markdown("<h1 style='text-align: center; color: #1E3A8A;'>Portal CoreGov</h1>", unsafe_allow_html=True)
     st.write("---")
     
-    # CSS dos Cards
+    # CSS dos Cards da Vitrine
     st.markdown("""
         <style>
         .card-v { padding: 25px; border-radius: 15px; box-shadow: 5px 5px 15px rgba(0,0,0,0.05); height: 280px; text-align: center; transition: 0.3s; }
@@ -51,33 +89,33 @@ def exibir_home():
 # --- 4. LÓGICA DE RENDERIZAÇÃO PRINCIPAL ---
 
 def main():
-    # Caso o usuário não esteja logado, mostramos a Vitrine ou Telas de Acesso
     if not st.session_state['logado']:
         if st.session_state['secao'] == 'home':
             exibir_home()
-        elif st.session_state['secao'] == 'login':
-            # Sua função de login aqui
-            if st.button("Voltar"): 
-                st.session_state['secao'] = 'home'
-                st.rerun()
+        
         elif st.session_state['secao'] == 'planos':
-            # Sua função de planos aqui
+            exibir_planos()
+            
+        elif st.session_state['secao'] == 'login':
+            st.markdown("### 🔑 Login de Consultor")
+            # Adicione aqui seu formulário de login real
             if st.button("Voltar"): 
                 st.session_state['secao'] = 'home'
                 st.rerun()
+                
         elif st.session_state['secao'] == 'cliente':
-            # Sua função área do cliente aqui
+            st.markdown("### 🏛️ Portal do Ente")
+            # Adicione aqui sua lógica de acesso via CNPJ
             if st.button("Voltar"): 
                 st.session_state['secao'] = 'home'
                 st.rerun()
     
-    # Caso esteja logado, mostra o Painel Interno
     else:
         st.sidebar.title("Painel CoreGov")
         if st.sidebar.button("Sair"):
             st.session_state.clear()
             st.rerun()
-        st.write("Bem-vindo ao sistema!")
+        st.write(f"Bem-vindo! Plano Atual: {st.session_state['usuario_plano']}")
 
 if __name__ == "__main__":
     main()
