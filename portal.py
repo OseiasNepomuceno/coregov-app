@@ -5,68 +5,27 @@ import os
 import gspread
 from google.oauth2.service_account import Credentials
 from datetime import datetime
+import requests
 
-# --- BLOQUEIO VISUAL TOTAL (MENU, GITHUB E RODAPÉ) ---
-hide_st_style = """
-            <style>
-            #MainMenu {visibility: hidden;} 
-            footer {visibility: hidden;}    
-            header {visibility: hidden;}    
-            [data-testid="stToolbar"] {visibility: hidden;}
-            [data-testid="stHeader"] {display: none;}
-            
-            /* Esta linha abaixo remove o botão 'Made with Streamlit' e o menu de perfil */
-            .viewerBadge_container__1QS1n {display: none !important;}
-            .stAppDeployButton {display: none !important;}
-            iframe[title="Managed Navigation"] {display: none !important;}
-            </style>
-            """
-st.markdown(hide_st_style, unsafe_allow_html=True)
+# --- 1. CONFIGURAÇÕES DE LINKS ---
+URL_CLIENTES_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT4dCgWCWMhrPNgrSMkXDd2s2FA9eP_gSu9pL8c1MfuJk3YvcQw0kVMq6i8p_FA2Zz7IhAYEexg3CoI/pub?gid=1923834729&single=true&output=csv"
+WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbzH2C-ski7ARq9XC6YweSMKf1VpSuxGvJHjAKSyL85ILsjLxGg6hDTxUHxLk40iEW7HTg/exec"
 
-# --- 1. IMPORTAÇÃO DOS MÓDULOS ---
+# --- 2. IMPORTAÇÃO DOS MÓDULOS ---
 import radar_emendas_2026
 import recursos2026
 import revisor_estatuto
 
-# --- 2. FUNÇÕES DE APOIO ---
+# --- 3. FUNÇÕES DE APOIO ---
 
 def obter_creds():
-    """Gerencia a autenticação usando Secrets (Nuvem) ou Arquivo JSON (Local)"""
     scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-    
     if "gcp_service_account" in st.secrets:
         return Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
-    
     nome_da_chave = 'ponto-facial-oseiascarveng-cd7b1ab54295.json'
     if os.path.exists(nome_da_chave):
         return Credentials.from_service_account_file(nome_da_chave, scopes=scope)
-    
     return None
-
-def registrar_log_acesso(usuario, plano):
-    try:
-        creds = obter_creds()
-        if creds:
-            client = gspread.authorize(creds)
-            sh = client.open("ID_LICENÇAS")
-            planilha = sh.worksheet("LOG_ACESSOS")
-            
-            data_hora = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-            acao = f"Login Efetuado - Plano {plano}"
-            
-            planilha.append_row([data_hora, usuario, acao])
-    except Exception as e:
-        st.error(f"Erro ao registrar log: {e}")
-
-def salvar_cadastro_google_sheets(dados_cliente):
-    try:
-        creds = obter_creds()
-        if creds:
-            client = gspread.authorize(creds)
-            planilha = client.open("ID_LICENÇAS").worksheet("usuario")
-            planilha.append_row(dados_cliente)
-            return True
-    except: return False
 
 def autenticar_usuario(usuario_digitado, senha_digitada):
     file_id = st.secrets.get("file_id_licencas")
@@ -87,186 +46,125 @@ def autenticar_usuario(usuario_digitado, senha_digitada):
         if not user_row.empty:
             dados = user_row.iloc[0]
             if str(dados.get('STATUS', 'pendente')).lower().strip() == 'ativo':
-                # --- CORREÇÃO AQUI: CAPTURA DINÂMICA DE PLANO E UF ---
-                plano_capturado = str(dados.get('PLANO', 'BÁSICO')).upper()
-                # Localidade (Coluna E / índice 4)
-                uf_escolhida = str(dados.iloc[4]).strip() if len(dados) >= 5 else "Brasil"
-
-                # Salvando variáveis padronizadas para o Radar de Emendas
                 st.session_state['logado'] = True
                 st.session_state['usuario_nome'] = u_clean
-                st.session_state['plano'] = plano_capturado
-                st.session_state['uf_liberada'] = uf_escolhida 
-                
-                # Mantendo compatibilidade com o restante do seu portal
-                st.session_state['usuario_plano'] = plano_capturado
-                st.session_state['usuario_logado'] = {
-                    'LOCALIDADE': uf_escolhida,
-                    'REVISOES_USADAS': dados.iloc[5] if len(dados) >= 6 else 0
-                }
-                
-                registrar_log_acesso(u_clean, plano_capturado)
+                st.session_state['usuario_plano'] = str(dados.get('PLANO', 'BÁSICO')).upper()
                 return True
         return False
     except: return False
 
-# --- 3. COMPONENTES DE INTERFACE ---
+# --- 4. MÓDULO GESTÃO DE CLIENTES ---
 
-def exibir_home_publica():
-    if os.path.exists("logocoregov.png"):
-        col_l1, col_l2, col_l3 = st.columns([1, 1, 1])
-        with col_l2:
-            st.image("logocoregov.png", use_container_width=True)
-    
-    st.markdown("<h1 style='text-align: center; color: #007bff;'>🛰️ CoreGov</h1>", unsafe_allow_html=True)
-    st.markdown("<h3 style='text-align: center;'>Inteligência Governamental Estratégica</h3>", unsafe_allow_html=True)
-    st.write("\n")
+def gerenciar_clientes():
+    st.header("💼 Gestão de Clientes Atendidos")
+    user_ref = st.session_state.get('usuario_nome', '').lower()
 
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.markdown('<div style="background-color: #f8f9fa; padding: 20px; border-radius: 15px; border-top: 5px solid #007bff; min-height: 200px; text-align: center;"><h4>👤 Já é Cliente?</h4><p>Acesse sua área exclusiva para monitorar emendas e recursos.</p></div>', unsafe_allow_html=True)
-        if st.button("FAZER LOGIN", key="btn_login_home", use_container_width=True, type="primary"):
-            st.session_state['tela'] = 'login'
-            st.rerun()
+    try:
+        # Lendo o CSV com cache para performance
+        df = pd.read_csv(URL_CLIENTES_CSV)
+        meus_clientes = df[df['Consultor'].astype(str).str.lower() == user_ref]
+    except Exception as e:
+        st.error(f"Erro ao carregar dados: {e}")
+        meus_clientes = pd.DataFrame()
 
-    with col2:
-        st.markdown('<div style="background-color: #f8f9fa; padding: 20px; border-radius: 15px; border-top: 5px solid #28a745; min-height: 200px; text-align: center;"><h4>🚀 Seja Consultor</h4><p>Cadastre-se para utilizar nossas ferramentas de IA parlamentar.</p></div>', unsafe_allow_html=True)
-        if st.button("CRIAR CONTA / CADASTRAR", key="btn_cad_home", use_container_width=True):
-            st.session_state['tela'] = 'cadastro'
-            st.rerun()
+    t1, t2, t3 = st.tabs(["👥 Minha Carteira", "➕ Novo Cadastro", "📊 Relatórios"])
 
-    with col3:
-        st.markdown('<div style="background-color: #f8f9fa; padding: 20px; border-radius: 15px; border-top: 5px solid #ffc107; min-height: 200px; text-align: center;"><h4>🛰️ Ecossistema</h4><p>Tecnologia e consultoria para captação estratégica.</p></div>', unsafe_allow_html=True)
-        st.info("💡 Consultoria + Tecnologia")
+    with t1:
+        if meus_clientes.empty:
+            st.info("Você ainda não possui clientes vinculados ao seu usuário.")
+        else:
+            st.dataframe(meus_clientes, use_container_width=True, hide_index=True)
 
-def tela_cadastro():
-    st.markdown("<h2 style='text-align: center; color: #28a745;'>🚀 Iniciar Nova Consultoria CoreGov</h2>", unsafe_allow_html=True)
-    
-    links_pagamento = {
-        "BÁSICO": "https://mpago.la/1gf9ryq",
-        "PREMIUM": "https://mpago.la/2CUKQgx"
-    }
-
-    if st.button("⬅️ Voltar para o Início"):
-        st.session_state['tela'] = 'home'
-        st.rerun()
-
-    col_p1, col_p2 = st.columns(2)
-    with col_p1:
-        st.markdown("""
-            <div style="background-color: #f8f9fa; padding: 15px; border-radius: 10px; border-top: 5px solid #6c757d; min-height: 250px;">
-                <h4 style="color: #495057; margin:0;">🌱 PLANO BÁSICO (ESTADUAL)</h4>
-                <p style="font-size: 13px; color: #666;">Consultoria estratégica para atuação regional.</p>
-                <h3 style="color: #333; margin-top: 5px;">R$ 1.250,00 <small style="font-size: 12px;">/mês</small></h3>
-                <ul style="font-size: 12px; color: #444;">
-                    <li><b>Radar de Emendas:</b> Todo o estado escolhido</li>
-                    <li>Monitoramento de Recursos 2026</li>
-                    <li><b>Até 10 Revisões de Estatuto por IA</b></li>
-                </ul>
-            </div>
-        """, unsafe_allow_html=True)
-    with col_p2:
-        st.markdown("""
-            <div style="background-color: #e7f5ff; padding: 15px; border-radius: 10px; border-top: 5px solid #007bff; min-height: 250px;">
-                <h4 style="color: #007bff; margin:0;">💎 PLANO PREMIUM (NACIONAL)</h4>
-                <p style="font-size: 13px; color: #666;">Inteligência de dados para escala nacional.</p>
-                <h3 style="color: #007bff; margin-top: 5px;">R$ 2.300,00 <small style="font-size: 12px; color: #333;">/mês</small></h3>
-                <ul style="font-size: 12px; color: #444;">
-                    <li><b>Acesso Nacional:</b> Todos os municípios e estados</li>
-                    <li>Inteligência de Dados Prioritária</li>
-                    <li><b>Até 15 Revisões de Estatuto por IA</b></li>
-                </ul>
-            </div>
-        """, unsafe_allow_html=True)
-
-    st.write("\n")
-    with st.form("form_registro_completo"):
-        nome = st.text_input("Nome Completo")
-        email = st.text_input("E-mail (Seu Login)")
-        senha = st.text_input("Senha", type="password")
-        plano = st.selectbox("Plano", ["BÁSICO", "PREMIUM"])
-        local = st.text_input("Local de Atuação", placeholder="Ex: RJ ou Nacional")
-        
-        if st.form_submit_button("PRÓXIMO PASSO: CADASTRAR ➡️", use_container_width=True):
-            if nome and email and senha:
-                if salvar_cadastro_google_sheets([email, senha, 'pendente', plano, local, 0]):
-                    st.success(f"✅ Cadastro realizado no ecossistema CoreGov!")
-                    st.link_button(f"💳 IR PARA PAGAMENTO {plano}", links_pagamento[plano], use_container_width=True)
+    with t2:
+        with st.form("add_client", clear_on_submit=True):
+            st.subheader("Cadastrar Novo Cliente")
+            c_cnpj = st.text_input("CNPJ")
+            c_nome = st.text_input("Nome do Cliente / Ente")
+            c_tel = st.text_input("Telefone")
+            if st.form_submit_button("Salvar na Planilha"):
+                if c_cnpj and c_nome:
+                    payload = {
+                        "acao": "incluir", 
+                        "consultor": user_ref, 
+                        "cnpj": c_cnpj, 
+                        "nome": c_nome,
+                        "telefone": c_tel
+                    }
+                    try:
+                        requests.post(WEBHOOK_URL, json=payload)
+                        st.success(f"Cliente {c_nome} enviado com sucesso!")
+                        st.balloons()
+                    except:
+                        st.error("Erro ao conectar com o servidor.")
                 else:
-                    st.error("Erro ao salvar cadastro.")
-            else:
-                st.warning("Preencha todos os campos.")
+                    st.warning("Preencha CNPJ e Nome.")
 
-def exibir_dashboard_boas_vindas(nome, plano, uso_revisor):
-    st.markdown(f"### 👋 Bem-vindo ao CoreGov, {nome.capitalize()}!")
-    col1, col2, col3 = st.columns(3)
-    with col1: st.success("📊 Radar 2026 Ativo")
-    with col2: st.info(f"📑 Revisor IA: {uso_revisor} usos")
-    with col3: st.warning(f"🏆 Plano {plano}")
-    st.divider()
+# --- 5. INTERFACE PRINCIPAL ---
 
-# --- 4. EXECUÇÃO PRINCIPAL ---
-
-st.set_page_config(page_title="CoreGov - Inteligência Governamental", page_icon="🛰️", layout="wide")
+st.set_page_config(page_title="CoreGov", page_icon="🛰️", layout="wide")
 
 def executar():
     if 'logado' not in st.session_state: st.session_state['logado'] = False
     if 'tela' not in st.session_state: st.session_state['tela'] = 'home'
 
     if not st.session_state['logado']:
-        if st.session_state['tela'] == 'home':
-            exibir_home_publica()
-        elif st.session_state['tela'] == 'cadastro':
-            tela_cadastro()
-        elif st.session_state['tela'] == 'login':
-            st.title("🔑 Login CoreGov")
-            with st.form("login_form"):
-                u = st.text_input("Usuário")
-                p = st.text_input("Senha", type="password")
-                if st.form_submit_button("Entrar"):
-                    if autenticar_usuario(u, p):
-                        st.rerun()
-                    else: st.error("Acesso negado.")
-            if st.button("⬅️ Voltar"):
-                st.session_state['tela'] = 'home'
-                st.rerun()
+        # TELA DE LOGIN (Simplificada para este exemplo)
+        st.title("🔑 Acesso ao Portal CoreGov")
+        with st.form("login"):
+            u = st.text_input("Usuário")
+            p = st.text_input("Senha", type="password")
+            if st.form_submit_button("Entrar"):
+                if autenticar_usuario(u, p): st.rerun()
+                else: st.error("Usuário ou senha incorretos.")
     else:
+        # --- SIDEBAR AJUSTADA ---
         with st.sidebar:
             if os.path.exists("logocoregov.png"):
                 st.image("logocoregov.png", use_container_width=True)
             
             st.title("CoreGov")
             user = st.session_state.get('usuario_nome', 'admin')
-            st.info(f"👤 {user.upper()}")
-            menu = ["🏠 Home", "📊 Recursos 2026", "🏛️ Radar de Emendas", "📜 Revisor de Estatuto"]
-            if user.lower() == "admin": menu.append("🔧 Gestão Admin")
-            menu.append("🚪 Sair")
-            escolha = st.radio("Módulos:", menu)
+            st.info(f"👤 CONSULTOR: {user.upper()}")
+            
+            st.subheader("Navegação")
+            opcoes_menu = [
+                "🏠 Home", 
+                "📊 Recursos 2026", 
+                "🏛️ Radar de Emendas", 
+                "📜 Revisor de Estatuto", 
+                "💼 Clientes Atendidos" # <--- OPÇÃO INSERIDA AQUI
+            ]
+            
+            if user.lower() == "admin":
+                opcoes_menu.append("🔧 Gestão Admin")
+            
+            escolha = st.radio("Selecione o Módulo:", opcoes_menu)
+            
+            st.divider()
+            if st.button("🚪 Sair do Sistema", use_container_width=True):
+                st.session_state.clear()
+                st.rerun()
 
-        if escolha == "🚪 Sair":
-            st.session_state.clear()
-            st.session_state['logado'] = False
-            st.session_state['tela'] = 'home'
-            st.rerun()
+        # --- LÓGICA DE EXIBIÇÃO DE TELAS ---
+        if escolha == "🏠 Home":
+            st.markdown(f"### 👋 Bem-vindo ao Painel de Controle, {user.capitalize()}!")
+            st.info("Utilize o menu lateral para acessar as ferramentas de inteligência ou gerenciar sua carteira de clientes.")
+            
+        elif escolha == "💼 Clientes Atendidos":
+            gerenciar_clientes()
+            
+        elif escolha == "🏛️ Radar de Emendas":
+            radar_emendas_2026.exibir_radar()
+            
+        elif escolha == "📊 Recursos 2026":
+            recursos2026.exibir_recursos()
+            
+        elif escolha == "📜 Revisor de Estatuto":
+            revisor_estatuto.exibir_revisor()
+            
         elif escolha == "🔧 Gestão Admin":
-            st.title("🔧 Gestão Administrativa CoreGov")
-            try:
-                creds = obter_creds()
-                if creds:
-                    client = gspread.authorize(creds)
-                    sh = client.open("ID_LICENÇAS")
-                    st.subheader("📝 Logs de Acesso (Aba: LOG_ACESSOS)")
-                    st.dataframe(pd.DataFrame(sh.worksheet("LOG_ACESSOS").get_all_records()))
-                    st.subheader("👥 Base de Usuários")
-                    st.dataframe(pd.DataFrame(sh.worksheet("usuario").get_all_records()))
-                else:
-                    st.error("Credenciais não encontradas nos Secrets ou no arquivo local.")
-            except Exception as e: st.error(f"Erro: {e}")
-        elif escolha == "🏛️ Radar de Emendas": radar_emendas_2026.exibir_radar()
-        elif escolha == "📊 Recursos 2026": recursos2026.exibir_recursos()
-        elif escolha == "📜 Revisor de Estatuto": revisor_estatuto.exibir_revisor()
-        else:
-            exibir_dashboard_boas_vindas(user, st.session_state.get('usuario_plano', 'BÁSICO'), st.session_state.get('usuario_logado', {}).get('REVISOES_USADAS', 0))
+            st.title("🔧 Painel Administrativo")
+            st.write("Acesso restrito para monitoramento global.")
 
 if __name__ == "__main__":
     executar()
