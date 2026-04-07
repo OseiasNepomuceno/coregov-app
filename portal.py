@@ -60,7 +60,6 @@ def gerenciar_clientes():
     user_ref = st.session_state.get('usuario_nome', '').lower()
 
     try:
-        # Lendo o CSV com cache para performance
         df = pd.read_csv(URL_CLIENTES_CSV)
         meus_clientes = df[df['Consultor'].astype(str).str.lower() == user_ref]
     except Exception as e:
@@ -104,20 +103,67 @@ def gerenciar_clientes():
 st.set_page_config(page_title="CoreGov", page_icon="🛰️", layout="wide")
 
 def executar():
+    # Inicialização de estados
     if 'logado' not in st.session_state: st.session_state['logado'] = False
-    if 'tela' not in st.session_state: st.session_state['tela'] = 'home'
+    if 'modo_login' not in st.session_state: st.session_state['modo_login'] = False
 
     if not st.session_state['logado']:
-        # TELA DE LOGIN (Simplificada para este exemplo)
-        st.title("🔑 Acesso ao Portal CoreGov")
-        with st.form("login"):
-            u = st.text_input("Usuário")
-            p = st.text_input("Senha", type="password")
-            if st.form_submit_button("Entrar"):
-                if autenticar_usuario(u, p): st.rerun()
-                else: st.error("Usuário ou senha incorretos.")
+        # --- TELA INICIAL (LANDING PAGE COM CARDS) ---
+        st.title("🛰️ Portal CoreGov")
+        st.subheader("Inteligência Estratégica em Recursos Públicos")
+        
+        # Estilização CSS para altura fixa dos cards
+        st.markdown("""
+            <style>
+            .card-box {
+                background-color: #f8f9fa;
+                padding: 25px;
+                border-radius: 15px;
+                border: 1px solid #e0e0e0;
+                height: 280px;
+                margin-bottom: 20px;
+                transition: 0.3s;
+            }
+            .card-box:hover { border-color: #007bff; }
+            </style>
+        """, unsafe_allow_html=True)
+
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            st.markdown('<div class="card-box"><h3>👤 Sou Consultor</h3><p>Acesse sua carteira de clientes, radar de emendas e ferramentas de gestão consultiva.</p></div>', unsafe_allow_html=True)
+            if st.button("Acessar Painel", use_container_width=True):
+                st.session_state['modo_login'] = True
+
+        with col2:
+            st.markdown('<div class="card-box"><h3>📝 Solicitar Licença</h3><p>Ainda não é parceiro? Cadastre-se para obter acesso às ferramentas de prospecção e análise.</p></div>', unsafe_allow_html=True)
+            if st.button("Criar Cadastro", use_container_width=True):
+                st.info("Formulário de solicitação em desenvolvimento.")
+
+        with col3:
+            st.markdown('<div class="card-box"><h3>🚀 Tecnologia</h3><p>Automatização de dados do Transferegov e monitoramento de emendas para alta performance governamental.</p></div>', unsafe_allow_html=True)
+            st.button("Saiba Mais", use_container_width=True)
+
+        # Exibição condicional do formulário de Login
+        if st.session_state['modo_login']:
+            st.divider()
+            col_a, col_b, col_c = st.columns([1, 1, 1])
+            with col_b:
+                st.markdown("### 🔑 Login de Consultor")
+                with st.form("login_form"):
+                    u = st.text_input("Usuário / E-mail")
+                    p = st.text_input("Senha", type="password")
+                    if st.form_submit_button("Entrar no Sistema", use_container_width=True):
+                        if autenticar_usuario(u, p):
+                            st.rerun()
+                        else:
+                            st.error("Usuário ou senha incorretos.")
+                if st.button("Cancelar"):
+                    st.session_state['modo_login'] = False
+                    st.rerun()
+
     else:
-        # --- SIDEBAR AJUSTADA ---
+        # --- ÁREA LOGADA (SIDEBAR E MÓDULOS) ---
         with st.sidebar:
             if os.path.exists("logocoregov.png"):
                 st.image("logocoregov.png", use_container_width=True)
@@ -132,7 +178,7 @@ def executar():
                 "📊 Recursos 2026", 
                 "🏛️ Radar de Emendas", 
                 "📜 Revisor de Estatuto", 
-                "💼 Clientes Atendidos" # <--- OPÇÃO INSERIDA AQUI
+                "💼 Clientes Atendidos"
             ]
             
             if user.lower() == "admin":
@@ -164,7 +210,7 @@ def executar():
             
         elif escolha == "🔧 Gestão Admin":
             st.title("🔧 Painel Administrativo")
-            st.write("Acesso restrito para monitoramento global.")
+            st.write("Acesso restrito para monitoramento global da operação.")
 
 if __name__ == "__main__":
     executar()
