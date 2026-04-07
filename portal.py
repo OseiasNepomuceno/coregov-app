@@ -10,6 +10,8 @@ import requests
 # --- 1. CONFIGURAÇÕES DE LINKS ---
 URL_CLIENTES_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT4dCgWCWMhrPNgrSMkXDd2s2FA9eP_gSu9pL8c1MfuJk3YvcQw0kVMq6i8p_FA2Zz7IhAYEexg3CoI/pub?gid=1923834729&single=true&output=csv"
 WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbzH2C-ski7ARq9XC6YweSMKf1VpSuxGvJHjAKSyL85ILsjLxGg6hDTxUHxLk40iEW7HTg/exec"
+LINK_MERCADO_PAGO_BASICO = "https://www.mercadopago.com.br" # Substitua pelo seu link real
+LINK_MERCADO_PAGO_PREMIUM = "https://www.mercadopago.com.br" # Substitua pelo seu link real
 
 # --- 2. IMPORTAÇÃO DOS MÓDULOS ---
 import radar_emendas_2026
@@ -104,124 +106,127 @@ st.set_page_config(page_title="CoreGov", page_icon="🛰️", layout="wide")
 
 def executar():
     if 'logado' not in st.session_state: st.session_state['logado'] = False
-    if 'modo_login' not in st.session_state: st.session_state['modo_login'] = False
+    if 'secao' not in st.session_state: st.session_state['secao'] = 'home'
 
     if not st.session_state['logado']:
-        # --- CABEÇALHO CENTRALIZADO ---
+        # --- CABEÇALHO ---
         col_c1, col_c2, col_c3 = st.columns([1, 2, 1])
         with col_c2:
             if os.path.exists("logocoregov.png"):
                 st.image("logocoregov.png", use_container_width=True)
-            
             st.markdown("<h1 style='text-align: center; color: #1E3A8A;'>Portal CoreGov</h1>", unsafe_allow_html=True)
             st.markdown("<h3 style='text-align: center; color: #64748B;'>Inteligência Estratégica em Recursos Públicos</h3>", unsafe_allow_html=True)
         
         st.write("---")
 
-        # --- CARDS SOMBRIADOS E COLORIDOS ---
-        st.markdown("""
-            <style>
-            .card-green {
-                background-color: #f0fff4;
-                padding: 25px;
-                border-radius: 15px;
-                border-left: 8px solid #48bb78;
-                box-shadow: 5px 5px 15px rgba(0,0,0,0.1);
-                height: 280px;
-                margin-bottom: 10px;
-            }
-            .card-yellow {
-                background-color: #fffff0;
-                padding: 25px;
-                border-radius: 15px;
-                border-left: 8px solid #ecc94b;
-                box-shadow: 5px 5px 15px rgba(0,0,0,0.1);
-                height: 280px;
-                margin-bottom: 10px;
-            }
-            .card-blue {
-                background-color: #ebf8ff;
-                padding: 25px;
-                border-radius: 15px;
-                border-left: 8px solid #4299e1;
-                box-shadow: 5px 5px 15px rgba(0,0,0,0.1);
-                height: 280px;
-                margin-bottom: 10px;
-            }
-            </style>
-        """, unsafe_allow_html=True)
+        # --- CARDS DA VITRINE (Só aparecem se nenhuma seção estiver ativa) ---
+        if st.session_state['secao'] == 'home':
+            st.markdown("""
+                <style>
+                .card-v { padding: 25px; border-radius: 15px; box-shadow: 5px 5px 15px rgba(0,0,0,0.1); height: 280px; margin-bottom: 10px; }
+                .card-green { background-color: #f0fff4; border-left: 8px solid #48bb78; }
+                .card-yellow { background-color: #fffff0; border-left: 8px solid #ecc94b; }
+                .card-blue { background-color: #ebf8ff; border-left: 8px solid #4299e1; }
+                </style>
+            """, unsafe_allow_html=True)
 
-        col1, col2, col3 = st.columns(3)
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.markdown('<div class="card-v card-green"><h3>👤 Sou Consultor</h3><p>Acesse sua carteira de clientes, radar de emendas e ferramentas de gestão consultiva.</p></div>', unsafe_allow_html=True)
+                if st.button("Acessar Painel", use_container_width=True):
+                    st.session_state['secao'] = 'login'
+                    st.rerun()
+            with col2:
+                st.markdown('<div class="card-v card-yellow"><h3>📝 Solicitar Licença</h3><p>Ainda não é parceiro? Escolha seu plano e obtenha acesso imediato às ferramentas.</p></div>', unsafe_allow_html=True)
+                if st.button("Ver Planos", use_container_width=True):
+                    st.session_state['secao'] = 'planos'
+                    st.rerun()
+            with col3:
+                st.markdown('<div class="card-v card-blue"><h3>🚀 Tecnologia</h3><p>Automatização de dados do Transferegov e monitoramento de emendas para alta performance.</p></div>', unsafe_allow_html=True)
+                st.button("Saiba Mais", use_container_width=True)
 
-        with col1:
-            st.markdown('<div class="card-green"><h3>👤 Sou Consultor</h3><p>Acesse sua carteira de clientes, radar de emendas e ferramentas de gestão consultiva.</p></div>', unsafe_allow_html=True)
-            if st.button("Acessar Painel", use_container_width=True, key="btn_login"):
-                st.session_state['modo_login'] = True
-
-        with col2:
-            st.markdown('<div class="card-yellow"><h3>📝 Solicitar Licença</h3><p>Ainda não é parceiro? Cadastre-se para obter acesso às ferramentas de prospecção e análise.</p></div>', unsafe_allow_html=True)
-            if st.button("Criar Cadastro", use_container_width=True, key="btn_cad"):
-                st.info("Formulário de solicitação em desenvolvimento.")
-
-        with col3:
-            st.markdown('<div class="card-blue"><h3>🚀 Tecnologia</h3><p>Automatização de dados do Transferegov e monitoramento de emendas para alta performance.</p></div>', unsafe_allow_html=True)
-            st.button("Saiba Mais", use_container_width=True, key="btn_info")
-
-        # Exibição do Formulário de Login
-        if st.session_state['modo_login']:
-            st.write("---")
-            col_a, col_b, col_c = st.columns([1, 1, 1])
-            with col_b:
+        # --- SEÇÃO DE LOGIN ---
+        elif st.session_state['secao'] == 'login':
+            col_l1, col_l2, col_l3 = st.columns([1, 1, 1])
+            with col_l2:
                 st.markdown("### 🔑 Login de Consultor")
                 with st.form("login_form"):
                     u = st.text_input("Usuário")
                     p = st.text_input("Senha", type="password")
                     if st.form_submit_button("Entrar no Sistema", use_container_width=True):
-                        if autenticar_usuario(u, p):
-                            st.rerun()
-                        else:
-                            st.error("Usuário ou senha incorretos.")
-                if st.button("Voltar"):
-                    st.session_state['modo_login'] = False
+                        if autenticar_usuario(u, p): st.rerun()
+                        else: st.error("Usuário ou senha incorretos.")
+                if st.button("Voltar para Início", use_container_width=True):
+                    st.session_state['secao'] = 'home'
                     st.rerun()
+
+        # --- SEÇÃO DE PLANOS (RECUPERADA) ---
+        elif st.session_state['secao'] == 'planos':
+            st.markdown("<h2 style='text-align: center;'>Escolha seu Plano de Acesso</h2>", unsafe_allow_html=True)
+            p1, p2 = st.columns(2)
+            
+            with p1:
+                st.markdown("""
+                    <div style="background-color: #ffffff; padding: 30px; border-radius: 15px; border: 2px solid #e0e0e0; text-align: center;">
+                        <h2 style="color: #4A5568;">Plano Básico</h2>
+                        <h1 style="color: #2D3748;">R$ 197<small>/mês</small></h1>
+                        <hr>
+                        <ul style="text-align: left; list-style-type: none; padding: 0;">
+                            <li>✅ Radar de Emendas 2026</li>
+                            <li>✅ Consulta de Recursos</li>
+                            <li>✅ Gestão de até 10 Clientes</li>
+                            <li>❌ Revisor de Estatuto IA</li>
+                        </ul>
+                    </div>
+                """, unsafe_allow_html=True)
+                st.link_button("Assinar Básico", LINK_MERCADO_PAGO_BASICO, use_container_width=True)
+
+            with p2:
+                st.markdown("""
+                    <div style="background-color: #f7fafc; padding: 30px; border-radius: 15px; border: 2px solid #4299e1; text-align: center;">
+                        <h2 style="color: #2B6CB0;">Plano Premium</h2>
+                        <h1 style="color: #2C5282;">R$ 397<small>/mês</small></h1>
+                        <hr>
+                        <ul style="text-align: left; list-style-type: none; padding: 0;">
+                            <li>✅ Todos os Recursos do Básico</li>
+                            <li>✅ Revisor de Estatuto IA Ilimitado</li>
+                            <li>✅ Gestão de Clientes Ilimitada</li>
+                            <li>✅ Suporte Prioritário</li>
+                        </ul>
+                    </div>
+                """, unsafe_allow_html=True)
+                st.link_button("Assinar Premium 🔥", LINK_MERCADO_PAGO_PREMIUM, use_container_width=True)
+            
+            st.write("")
+            if st.button("Voltar para Início", use_container_width=True):
+                st.session_state['secao'] = 'home'
+                st.rerun()
 
     else:
         # --- ÁREA LOGADA (SIDEBAR) ---
         with st.sidebar:
-            if os.path.exists("logocoregov.png"):
-                st.image("logocoregov.png", use_container_width=True)
-            
+            if os.path.exists("logocoregov.png"): st.image("logocoregov.png", use_container_width=True)
             st.title("CoreGov")
             user = st.session_state.get('usuario_nome', 'admin')
             st.info(f"👤 CONSULTOR: {user.upper()}")
-            
             st.subheader("Navegação")
             opcoes_menu = ["🏠 Home", "📊 Recursos 2026", "🏛️ Radar de Emendas", "📜 Revisor de Estatuto", "💼 Clientes Atendidos"]
-            
-            if user.lower() == "admin":
-                opcoes_menu.append("🔧 Gestão Admin")
-            
+            if user.lower() == "admin": opcoes_menu.append("🔧 Gestão Admin")
             escolha = st.radio("Selecione o Módulo:", opcoes_menu)
-            
             st.divider()
             if st.button("🚪 Sair do Sistema", use_container_width=True):
                 st.session_state.clear()
                 st.rerun()
 
-        # --- LOGICA DE EXIBIÇÃO DE TELAS ---
+        # --- LÓGICA DE EXIBIÇÃO DE TELAS ---
         if escolha == "🏠 Home":
             st.markdown(f"### 👋 Bem-vindo, {user.capitalize()}!")
             st.info("Utilize o menu lateral para gerenciar sua carteira e radar.")
-        elif escolha == "💼 Clientes Atendidos":
-            gerenciar_clientes()
-        elif escolha == "🏛️ Radar de Emendas":
-            radar_emendas_2026.exibir_radar()
-        elif escolha == "📊 Recursos 2026":
-            recursos2026.exibir_recursos()
-        elif escolha == "📜 Revisor de Estatuto":
-            revisor_estatuto.exibir_revisor()
-        elif escolha == "🔧 Gestão Admin":
-            st.title("🔧 Painel Administrativo")
+        elif escolha == "💼 Clientes Atendidos": gerenciar_clientes()
+        elif escolha == "🏛️ Radar de Emendas": radar_emendas_2026.exibir_radar()
+        elif escolha == "📊 Recursos 2026": recursos2026.exibir_recursos()
+        elif escolha == "📜 Revisor de Estatuto": revisor_estatuto.exibir_revisor()
+        elif escolha == "🔧 Gestão Admin": st.title("🔧 Painel Administrativo")
 
 if __name__ == "__main__":
     executar()
