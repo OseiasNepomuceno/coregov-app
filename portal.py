@@ -3,72 +3,81 @@ import pandas as pd
 import gdown
 import os
 
-# --- 1. CONFIGURAÇÕES DE LINKS ---
-LINK_MERCADO_PAGO_BASICO = "https://www.mercadopago.com.br" 
-LINK_MERCADO_PAGO_PREMIUM = "https://www.mercadopago.com.br" 
+# --- 1. INICIALIZAÇÃO CRÍTICA (Evita Tela Branca) ---
+if 'secao' not in st.session_state:
+    st.session_state['secao'] = 'home'
+if 'logado' not in st.session_state:
+    st.session_state['logado'] = False
+if 'usuario_plano' not in st.session_state:
+    st.session_state['usuario_plano'] = 'BÁSICO'
 
-# --- 2. SEÇÃO DE PLANOS (TEXTO ATUALIZADO) ---
+# --- 2. CONFIGURAÇÃO DA PÁGINA ---
+st.set_page_config(page_title="CoreGov", page_icon="🛰️", layout="wide")
 
-def exibir_planos():
-    st.markdown("<h2 style='text-align: center; color: #1E3A8A;'>Licenças de Uso Profissional</h2>", unsafe_allow_html=True)
+# --- 3. FUNÇÕES DE NAVEGAÇÃO ---
+
+def exibir_home():
+    st.markdown("<h1 style='text-align: center; color: #1E3A8A;'>Portal CoreGov</h1>", unsafe_allow_html=True)
+    st.write("---")
     
-    p1, p2 = st.columns(2)
-    
-    with p1:
-        st.markdown("""
-            <div style="background-color: #ffffff; padding: 30px; border-radius: 15px; border: 2px solid #e0e0e0; text-align: center; min-height: 550px; box-shadow: 0px 4px 10px rgba(0,0,0,0.05);">
-                <h2 style="color: #4A5568;">Plano Básico</h2>
-                <h1 style="color: #2D3748; font-size: 32px;">R$ 1.250,00<small style="font-size: 14px;">/mês</small></h1>
-                <p style="color: #718096; font-size: 14px;">Faturamento Mensal Fixo</p>
-                <hr>
-                <ul style="text-align: left; list-style-type: none; padding: 0; font-size: 15px; line-height: 2.2;">
-                    <li>✅ <b>Radar de Emendas 2026</b></li>
-                    <li>✅ <b>Consulta de Recursos (Transferegov)</b></li>
-                    <li>✅ <b>Revisor de Estatuto IA:</b> 10 revisões</li>
-                    <li>❌ <del style="color: #a0aec0;">Gestão de Clientes e Relatórios</del></li>
-                    <li>❌ <del style="color: #a0aec0;">Acesso ao Portal do Ente (CNPJ)</del></li>
-                </ul>
-            </div>
-        """, unsafe_allow_html=True)
-        st.link_button("Assinar Plano Básico", LINK_MERCADO_PAGO_BASICO, use_container_width=True)
+    # CSS dos Cards
+    st.markdown("""
+        <style>
+        .card-v { padding: 25px; border-radius: 15px; box-shadow: 5px 5px 15px rgba(0,0,0,0.05); height: 280px; text-align: center; transition: 0.3s; }
+        .card-v:hover { transform: translateY(-5px); }
+        </style>
+    """, unsafe_allow_html=True)
 
-    with p2:
-        st.markdown("""
-            <div style="background-color: #f7fafc; padding: 30px; border-radius: 15px; border: 2px solid #4299e1; text-align: center; min-height: 550px; box-shadow: 0px 8px 16px rgba(0,0,0,0.1);">
-                <h2 style="color: #2B6CB0;">Plano Premium 🔥</h2>
-                <h1 style="color: #2C5282; font-size: 32px;">R$ 2.300,00<small style="font-size: 14px;">/mês</small></h1>
-                <p style="color: #718096; font-size: 14px;">Faturamento Mensal Fixo</p>
-                <hr>
-                <ul style="text-align: left; list-style-type: none; padding: 0; font-size: 15px; line-height: 2.2;">
-                    <li>✅ <b>Tudo do Plano Básico</b></li>
-                    <li>✅ <b>Gestão de Clientes Atendidos</b></li>
-                    <li>✅ <b>Relatórios de Captação</b></li>
-                    <li>✅ <b>Portal do Cliente (Acesso via CNPJ)</b></li>
-                    <li>✅ <b>Revisor de Estatuto IA:</b> 15 revisões</li>
-                    <li>⚠️ <b>Taxa Operacional:</b> R$ 450,00/cliente</li>
-                </ul>
-            </div>
-        """, unsafe_allow_html=True)
-        st.link_button("Assinar Plano Premium", LINK_MERCADO_PAGO_PREMIUM, use_container_width=True)
-    
-    if st.button("⬅️ Voltar para a Vitrine", use_container_width=True):
-        st.session_state['secao'] = 'home'
-        st.rerun()
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+        st.markdown('<div class="card-v" style="background:#f0fff4; border-bottom: 5px solid #48bb78;"><h3>👤 Consultor</h3><p>Painel de gestão.</p></div>', unsafe_allow_html=True)
+        if st.button("Entrar no Painel", use_container_width=True):
+            st.session_state['secao'] = 'login'
+            st.rerun()
+    with c2:
+        st.markdown('<div class="card-v" style="background:#fffff0; border-bottom: 5px solid #ecc94b;"><h3>📝 Licenças</h3><p>Planos profissionais.</p></div>', unsafe_allow_html=True)
+        if st.button("Ver Planos", use_container_width=True):
+            st.session_state['secao'] = 'planos'
+            st.rerun()
+    with c3:
+        st.markdown('<div class="card-v" style="background:#ebf8ff; border-bottom: 5px solid #4299e1;"><h3>🚀 Tecnologia</h3><p>IA e Monitoramento.</p></div>', unsafe_allow_html=True)
+        st.button("Saiba Mais", use_container_width=True, key="tec_home")
+    with c4:
+        st.markdown('<div class="card-v" style="background:#fff5f5; border-bottom: 5px solid #f56565;"><h3>🏛️ Sou Cliente</h3><p>Relatórios via CNPJ.</p></div>', unsafe_allow_html=True)
+        if st.button("Acessar Relatórios", use_container_width=True):
+            st.session_state['secao'] = 'cliente'
+            st.rerun()
 
-# --- 3. MÓDULO GESTÃO DE CLIENTES (LÓGICA PREMIUM) ---
+# --- 4. LÓGICA DE RENDERIZAÇÃO PRINCIPAL ---
 
-def gerenciar_clientes():
-    plano_usuario = st.session_state.get('usuario_plano', 'BÁSICO')
+def main():
+    # Caso o usuário não esteja logado, mostramos a Vitrine ou Telas de Acesso
+    if not st.session_state['logado']:
+        if st.session_state['secao'] == 'home':
+            exibir_home()
+        elif st.session_state['secao'] == 'login':
+            # Sua função de login aqui
+            if st.button("Voltar"): 
+                st.session_state['secao'] = 'home'
+                st.rerun()
+        elif st.session_state['secao'] == 'planos':
+            # Sua função de planos aqui
+            if st.button("Voltar"): 
+                st.session_state['secao'] = 'home'
+                st.rerun()
+        elif st.session_state['secao'] == 'cliente':
+            # Sua função área do cliente aqui
+            if st.button("Voltar"): 
+                st.session_state['secao'] = 'home'
+                st.rerun()
     
-    if plano_usuario == 'BÁSICO':
-        st.warning("⚠️ **Módulo Restrito.** O Plano Básico não inclui a Gestão de Clientes.")
-        st.info("Faça o upgrade para o **Plano Premium** para gerenciar sua carteira e liberar relatórios.")
+    # Caso esteja logado, mostra o Painel Interno
     else:
-        st.header("💼 Gestão de Clientes e Relatórios")
-        t1, t2, t3 = st.tabs(["👥 Minha Carteira", "➕ Novo Cadastro", "📊 Relatório de Captação"])
-        with t3:
-            # Aqui chamamos a função que exibe a interface de preenchimento do relatório
-            st.info("Preencha os dados abaixo para atualizar o relatório visualizado pelo seu cliente.")
-            # ... (Função exibir_relatorio_acesv que definimos antes) ...
+        st.sidebar.title("Painel CoreGov")
+        if st.sidebar.button("Sair"):
+            st.session_state.clear()
+            st.rerun()
+        st.write("Bem-vindo ao sistema!")
 
-# ... (Restante do código de navegação e login permanece igual) ...
+if __name__ == "__main__":
+    main()
