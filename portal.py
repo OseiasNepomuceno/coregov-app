@@ -103,67 +103,90 @@ def gerenciar_clientes():
 st.set_page_config(page_title="CoreGov", page_icon="🛰️", layout="wide")
 
 def executar():
-    # Inicialização de estados
     if 'logado' not in st.session_state: st.session_state['logado'] = False
     if 'modo_login' not in st.session_state: st.session_state['modo_login'] = False
 
     if not st.session_state['logado']:
-        # --- TELA INICIAL (LANDING PAGE COM CARDS) ---
-        st.title("🛰️ Portal CoreGov")
-        st.subheader("Inteligência Estratégica em Recursos Públicos")
+        # --- CABEÇALHO CENTRALIZADO ---
+        col_c1, col_c2, col_c3 = st.columns([1, 2, 1])
+        with col_c2:
+            if os.path.exists("logocoregov.png"):
+                st.image("logocoregov.png", use_container_width=True)
+            
+            st.markdown("<h1 style='text-align: center; color: #1E3A8A;'>Portal CoreGov</h1>", unsafe_allow_html=True)
+            st.markdown("<h3 style='text-align: center; color: #64748B;'>Inteligência Estratégica em Recursos Públicos</h3>", unsafe_allow_html=True)
         
-        # Estilização CSS para altura fixa dos cards
+        st.write("---")
+
+        # --- CARDS SOMBRIADOS E COLORIDOS ---
         st.markdown("""
             <style>
-            .card-box {
-                background-color: #f8f9fa;
+            .card-green {
+                background-color: #f0fff4;
                 padding: 25px;
                 border-radius: 15px;
-                border: 1px solid #e0e0e0;
+                border-left: 8px solid #48bb78;
+                box-shadow: 5px 5px 15px rgba(0,0,0,0.1);
                 height: 280px;
-                margin-bottom: 20px;
-                transition: 0.3s;
+                margin-bottom: 10px;
             }
-            .card-box:hover { border-color: #007bff; }
+            .card-yellow {
+                background-color: #fffff0;
+                padding: 25px;
+                border-radius: 15px;
+                border-left: 8px solid #ecc94b;
+                box-shadow: 5px 5px 15px rgba(0,0,0,0.1);
+                height: 280px;
+                margin-bottom: 10px;
+            }
+            .card-blue {
+                background-color: #ebf8ff;
+                padding: 25px;
+                border-radius: 15px;
+                border-left: 8px solid #4299e1;
+                box-shadow: 5px 5px 15px rgba(0,0,0,0.1);
+                height: 280px;
+                margin-bottom: 10px;
+            }
             </style>
         """, unsafe_allow_html=True)
 
         col1, col2, col3 = st.columns(3)
 
         with col1:
-            st.markdown('<div class="card-box"><h3>👤 Sou Consultor</h3><p>Acesse sua carteira de clientes, radar de emendas e ferramentas de gestão consultiva.</p></div>', unsafe_allow_html=True)
-            if st.button("Acessar Painel", use_container_width=True):
+            st.markdown('<div class="card-green"><h3>👤 Sou Consultor</h3><p>Acesse sua carteira de clientes, radar de emendas e ferramentas de gestão consultiva.</p></div>', unsafe_allow_html=True)
+            if st.button("Acessar Painel", use_container_width=True, key="btn_login"):
                 st.session_state['modo_login'] = True
 
         with col2:
-            st.markdown('<div class="card-box"><h3>📝 Solicitar Licença</h3><p>Ainda não é parceiro? Cadastre-se para obter acesso às ferramentas de prospecção e análise.</p></div>', unsafe_allow_html=True)
-            if st.button("Criar Cadastro", use_container_width=True):
+            st.markdown('<div class="card-yellow"><h3>📝 Solicitar Licença</h3><p>Ainda não é parceiro? Cadastre-se para obter acesso às ferramentas de prospecção e análise.</p></div>', unsafe_allow_html=True)
+            if st.button("Criar Cadastro", use_container_width=True, key="btn_cad"):
                 st.info("Formulário de solicitação em desenvolvimento.")
 
         with col3:
-            st.markdown('<div class="card-box"><h3>🚀 Tecnologia</h3><p>Automatização de dados do Transferegov e monitoramento de emendas para alta performance governamental.</p></div>', unsafe_allow_html=True)
-            st.button("Saiba Mais", use_container_width=True)
+            st.markdown('<div class="card-blue"><h3>🚀 Tecnologia</h3><p>Automatização de dados do Transferegov e monitoramento de emendas para alta performance.</p></div>', unsafe_allow_html=True)
+            st.button("Saiba Mais", use_container_width=True, key="btn_info")
 
-        # Exibição condicional do formulário de Login
+        # Exibição do Formulário de Login
         if st.session_state['modo_login']:
-            st.divider()
+            st.write("---")
             col_a, col_b, col_c = st.columns([1, 1, 1])
             with col_b:
                 st.markdown("### 🔑 Login de Consultor")
                 with st.form("login_form"):
-                    u = st.text_input("Usuário / E-mail")
+                    u = st.text_input("Usuário")
                     p = st.text_input("Senha", type="password")
                     if st.form_submit_button("Entrar no Sistema", use_container_width=True):
                         if autenticar_usuario(u, p):
                             st.rerun()
                         else:
                             st.error("Usuário ou senha incorretos.")
-                if st.button("Cancelar"):
+                if st.button("Voltar"):
                     st.session_state['modo_login'] = False
                     st.rerun()
 
     else:
-        # --- ÁREA LOGADA (SIDEBAR E MÓDULOS) ---
+        # --- ÁREA LOGADA (SIDEBAR) ---
         with st.sidebar:
             if os.path.exists("logocoregov.png"):
                 st.image("logocoregov.png", use_container_width=True)
@@ -173,13 +196,7 @@ def executar():
             st.info(f"👤 CONSULTOR: {user.upper()}")
             
             st.subheader("Navegação")
-            opcoes_menu = [
-                "🏠 Home", 
-                "📊 Recursos 2026", 
-                "🏛️ Radar de Emendas", 
-                "📜 Revisor de Estatuto", 
-                "💼 Clientes Atendidos"
-            ]
+            opcoes_menu = ["🏠 Home", "📊 Recursos 2026", "🏛️ Radar de Emendas", "📜 Revisor de Estatuto", "💼 Clientes Atendidos"]
             
             if user.lower() == "admin":
                 opcoes_menu.append("🔧 Gestão Admin")
@@ -191,26 +208,20 @@ def executar():
                 st.session_state.clear()
                 st.rerun()
 
-        # --- LÓGICA DE EXIBIÇÃO DE TELAS ---
+        # --- LOGICA DE EXIBIÇÃO DE TELAS ---
         if escolha == "🏠 Home":
-            st.markdown(f"### 👋 Bem-vindo ao Painel de Controle, {user.capitalize()}!")
-            st.info("Utilize o menu lateral para acessar as ferramentas de inteligência ou gerenciar sua carteira de clientes.")
-            
+            st.markdown(f"### 👋 Bem-vindo, {user.capitalize()}!")
+            st.info("Utilize o menu lateral para gerenciar sua carteira e radar.")
         elif escolha == "💼 Clientes Atendidos":
             gerenciar_clientes()
-            
         elif escolha == "🏛️ Radar de Emendas":
             radar_emendas_2026.exibir_radar()
-            
         elif escolha == "📊 Recursos 2026":
             recursos2026.exibir_recursos()
-            
         elif escolha == "📜 Revisor de Estatuto":
             revisor_estatuto.exibir_revisor()
-            
         elif escolha == "🔧 Gestão Admin":
             st.title("🔧 Painel Administrativo")
-            st.write("Acesso restrito para monitoramento global da operação.")
 
 if __name__ == "__main__":
     executar()
