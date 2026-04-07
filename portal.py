@@ -79,7 +79,7 @@ def gerenciar_clientes():
     with t2:
         with st.form("add_client", clear_on_submit=True):
             st.subheader("Cadastrar Novo Cliente")
-            st.info("💡 A ativação de cada novo cliente gera uma taxa de R$ 450,00 na fatura mensal.")
+            st.info("💡 A ativação e manutenção de cada cliente gera um custo operacional de R$ 450,00/mês.")
             c_cnpj = st.text_input("CNPJ")
             c_nome = st.text_input("Nome do Cliente / Ente")
             c_tel = st.text_input("Telefone")
@@ -161,23 +161,24 @@ def executar():
                     st.session_state['secao'] = 'home'
                     st.rerun()
 
-        # --- SEÇÃO DE PLANOS (REGRAS ATUALIZADAS) ---
+        # --- SEÇÃO DE PLANOS (INFORMAÇÕES ATUALIZADAS) ---
         elif st.session_state['secao'] == 'planos':
             st.markdown("<h2 style='text-align: center; color: #1E3A8A;'>Licenças de Uso Profissional</h2>", unsafe_allow_html=True)
             p1, p2 = st.columns(2)
             
             with p1:
                 st.markdown("""
-                    <div style="background-color: #ffffff; padding: 30px; border-radius: 15px; border: 2px solid #e0e0e0; text-align: center; min-height: 520px;">
+                    <div style="background-color: #ffffff; padding: 30px; border-radius: 15px; border: 2px solid #e0e0e0; text-align: center; min-height: 540px;">
                         <h2 style="color: #4A5568;">Plano Básico</h2>
                         <h1 style="color: #2D3748; font-size: 32px;">R$ 1.250,00<small style="font-size: 14px;">/mês</small></h1>
-                        <p style="color: #718096;"><b>+ R$ 450,00 por cliente atendido</b></p>
+                        <p style="color: #718096; font-size: 14px;">Faturamento Mensal Fixo</p>
                         <hr>
-                        <ul style="text-align: left; list-style-type: none; padding: 0;">
-                            <li>✅ Radar de Emendas 2026</li>
-                            <li>✅ Consulta de Recursos</li>
-                            <li>✅ Gestão de Clientes Ilimitada (Taxa/Ativação)</li>
-                            <li>✅ Revisor de Estatuto (Até 10 revisões)</li>
+                        <ul style="text-align: left; list-style-type: none; padding: 0; font-size: 15px; line-height: 1.6;">
+                            <li>✅ <b>Radar de Emendas 2026</b></li>
+                            <li>✅ <b>Consulta de Recursos</b></li>
+                            <li>✅ <b>Gestão de Clientes</b> (Carteira/ Cadastro/ Relatórios)</li>
+                            <li>⚠️ <b>Custo Operacional:</b> R$ 450,00/mês por Cliente</li>
+                            <li>✅ <b>Revisor de Estatuto IA:</b> Até 10 revisões</li>
                         </ul>
                     </div>
                 """, unsafe_allow_html=True)
@@ -185,17 +186,17 @@ def executar():
 
             with p2:
                 st.markdown("""
-                    <div style="background-color: #f7fafc; padding: 30px; border-radius: 15px; border: 2px solid #4299e1; text-align: center; min-height: 520px; box-shadow: 0px 8px 16px rgba(0,0,0,0.05);">
+                    <div style="background-color: #f7fafc; padding: 30px; border-radius: 15px; border: 2px solid #4299e1; text-align: center; min-height: 540px; box-shadow: 0px 8px 16px rgba(0,0,0,0.05);">
                         <h2 style="color: #2B6CB0;">Plano Premium</h2>
                         <h1 style="color: #2C5282; font-size: 32px;">R$ 2.300,00<small style="font-size: 14px;">/mês</small></h1>
-                        <p style="color: #718096;"><b>+ R$ 450,00 por cliente atendido</b></p>
+                        <p style="color: #718096; font-size: 14px;">Faturamento Mensal Fixo</p>
                         <hr>
-                        <ul style="text-align: left; list-style-type: none; padding: 0;">
-                            <li>✅ Todos os Recursos do Plano Básico</li>
-                            <li>✅ Revisor de Estatuto (Até 15 revisões)</li>
-                            <li>✅ Gestão de Clientes Ilimitada (Taxa/Ativação)</li>
-                            <li>✅ Inteligência de Dados Prioritária</li>
-                            <li>✅ Suporte Personalizado</li>
+                        <ul style="text-align: left; list-style-type: none; padding: 0; font-size: 15px; line-height: 1.6;">
+                            <li>✅ <b>Tudo do Plano Básico</b></li>
+                            <li>✅ <b>Revisor de Estatuto IA:</b> Até 15 revisões</li>
+                            <li>✅ <b>Gestão de Clientes</b> (Carteira/ Cadastro/ Relatórios)</li>
+                            <li>⚠️ <b>Custo Operacional:</b> R$ 450,00/mês por Cliente</li>
+                            <li>✅ <b>Inteligência Prioritária e Suporte VIP</b></li>
                         </ul>
                     </div>
                 """, unsafe_allow_html=True)
@@ -224,7 +225,7 @@ def executar():
 
         if escolha == "🏠 Home":
             st.markdown(f"### 👋 Bem-vindo, {user.capitalize()}!")
-            st.info("Utilize o menu lateral para gerenciar sua operação governamental.")
+            st.info("Acesse os módulos laterais para iniciar sua consultoria.")
         elif escolha == "💼 Clientes Atendidos": gerenciar_clientes()
         elif escolha == "🏛️ Radar de Emendas": radar_emendas_2026.exibir_radar()
         elif escolha == "📊 Recursos 2026": recursos2026.exibir_recursos()
